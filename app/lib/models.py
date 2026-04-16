@@ -268,6 +268,26 @@ class CoupangResultLog(Base):
     )
 
 
+class PlanFile(Base):
+    """입고 계획에 연결된 업로드 파일 영속화."""
+
+    __tablename__ = "plan_file"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    plan_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey("inbound_plan.id", ondelete="CASCADE"), index=True
+    )
+    file_type: Mapped[str] = mapped_column(String(32), nullable=False)
+    # coupang_raw | wms_raw | template | movement | label_pdf | attach_pdf | invoice_pdf | order_search
+    file_name: Mapped[str] = mapped_column(Text, nullable=False)
+    content: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    __table_args__ = (
+        UniqueConstraint("plan_id", "file_type", name="uq_plan_file_type"),
+    )
+
+
 class ActivityLog(Base):
     __tablename__ = "activity_log"
 
