@@ -1043,7 +1043,7 @@ if _is_new:
                 st.caption("조정 없음")
 
     st.divider()
-    st.subheader("3. 저장 및 쿠팡 업로드 파일 생성")
+    st.subheader("3. 저장 및 쿠팡 입고생성 업로드 파일 생성")
 
     # export_items 준비 — allocated_df 전체 사용 (필터와 무관)
     # edited (필터된 view) 에서 수정된 inbound_final 을 allocated_df 에 반영
@@ -1116,7 +1116,7 @@ if _is_new:
                 )
                 st.success(
                     f"임시 저장 완료 (plan_id={plan_id}). 검수·2차결과물 단계로 이동합니다. "
-                    f"(쿠팡 업로드 파일은 기존 관리 모드의 재생성 버튼으로 다운로드 가능)"
+                    f"(쿠팡 입고생성 업로드 파일은 기존 관리 모드의 재생성 버튼으로 다운로드 가능)"
                 )
                 # 위젯 생성 전에 pending 플래그로 처리 (session_state 직접수정 불가 회피)
                 st.session_state["_pending_plan_id"] = plan_id
@@ -1126,7 +1126,7 @@ if _is_new:
 
     with col_dl:
         if confirmed_qty == 0:
-            st.button("📥 쿠팡 업로드 파일 생성", disabled=True, use_container_width=True)
+            st.button("📥 쿠팡 입고생성 업로드 파일 생성", disabled=True, use_container_width=True)
             st.caption("확정 수량을 입력하세요.")
         else:
             try:
@@ -1136,7 +1136,7 @@ if _is_new:
                     delete_non_target=True,
                 )
                 st.download_button(
-                    "📥 쿠팡 업로드 파일 생성",
+                    "📥 쿠팡 입고생성 업로드 파일 생성",
                     data=xlsx,
                     file_name=f"generated_excel_{date.today().isoformat()}.xlsx",
                     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -1262,7 +1262,7 @@ else:
                 ))
             try:
                 _re_xlsx, _re_miss = fill_coupang_template(io.BytesIO(_tpl_bytes), _re_export, delete_non_target=True)
-                st.download_button("📥 쿠팡 업로드 파일 재생성", data=_re_xlsx,
+                st.download_button("📥 쿠팡 입고생성 업로드 파일 재생성", data=_re_xlsx,
                     file_name=f"generated_excel_{date.today().isoformat()}.xlsx",
                     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
                 if _re_miss:
