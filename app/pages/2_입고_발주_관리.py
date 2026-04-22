@@ -1333,8 +1333,8 @@ else:
         ]
         _pa = pa_assign_pallets(_pa_items, pallet_size=cfg.pallet_size_boxes)
 
-    # === 2. 검수 & 2차 결과물 ===
-    with st.expander("📑 2. 검수 & 2차 결과물", expanded=(_mgmt_status == "draft")):
+    # === 2. 검수 & 물류센터 전달 파일 ===
+    with st.expander("📑 2. 검수 & 물류센터 전달 파일", expanded=(_mgmt_status == "draft")):
         _pdf_up = st.file_uploader(
             "쿠팡 결과 PDF 3개를 업로드 (또는 이전 업로드 자동 복원)",
             type=["pdf"], accept_multiple_files=True,
@@ -1483,8 +1483,8 @@ else:
                     with st.expander(f"세부 {len(_ck.items)}건"):
                         st.dataframe(pd.DataFrame(_ck.items), use_container_width=True, hide_index=True)
 
-            # 2차 결과물
-            st.markdown("#### 2차 결과물")
+            # 물류센터 전달 파일
+            st.markdown("#### 물류센터 전달 파일")
             _order_base = (_invoice.order_id if _invoice and _invoice.order_id else _attachment.milkrun_id) or ""
             _fc = _attachment.fc_name or _mgmt_plan.fc_name or "FC"
             _arr = _attachment.arrival_date or _mgmt_plan.arrival_date or date.today()
@@ -1538,18 +1538,20 @@ else:
                     st.error(str(e))
 
             # PDF 리네임
-            st.markdown("##### 쿠팡 결과 PDF (파일명 변경)")
             _dpc = st.columns(3)
             if _ib:
                 with _dpc[0]:
                     st.download_button("📥 물류동봉문서(거래명세서)", data=_ib,
-                        file_name=f"밀크런_물류동봉문서(거래명세서)_{_fc}_{_datesuf}.pdf", mime="application/pdf", use_container_width=True)
+                        file_name=f"밀크런_물류동봉문서(거래명세서)_{_fc}_{_datesuf}.pdf", mime="application/pdf",
+                        use_container_width=True, type="primary")
             with _dpc[1]:
                 st.download_button("📥 제품 바코드라벨", data=_lb,
-                    file_name=f"제품 바코드라벨_{_fc}_{_datesuf}.pdf", mime="application/pdf", use_container_width=True)
+                    file_name=f"제품 바코드라벨_{_fc}_{_datesuf}.pdf", mime="application/pdf",
+                    use_container_width=True, type="primary")
             with _dpc[2]:
                 st.download_button("📥 물류부착문서(팔레트부착)", data=_ab,
-                    file_name=f"밀크런_물류부착문서1 (팔레트부착문서)_{_fc}_{_datesuf}.pdf", mime="application/pdf", use_container_width=True)
+                    file_name=f"밀크런_물류부착문서1 (팔레트부착문서)_{_fc}_{_datesuf}.pdf", mime="application/pdf",
+                    use_container_width=True, type="primary")
 
             # 발주 확정
             if _mgmt_status == "draft":
