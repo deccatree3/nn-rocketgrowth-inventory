@@ -994,14 +994,14 @@ if _is_new:
             ),
             "box_qty": st.column_config.NumberColumn("box입인", format="%d"),
             "inbound_basic": st.column_config.NumberColumn(
-                "입고권장",
+                "입고권장(낱개)",
                 format="%d",
-                help="엔진 추천 낱개 수량 (팔레트 미고려)",
+                help="엔진 기본 추천 낱개 수량 — 팔레트 꽉 채움 적용 전",
             ),
             "basic_boxes": st.column_config.NumberColumn(
                 "입고권장(box)",
                 format="%d",
-                help="입고권장 ÷ box입인",
+                help="엔진 기본 추천 박스수 — 팔레트 꽉 채움 적용 전 (입고권장(낱개) ÷ box입인)",
             ),
             "inbound_final": st.column_config.NumberColumn(
                 "확정",
