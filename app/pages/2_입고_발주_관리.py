@@ -800,6 +800,8 @@ if _is_new:
                 ]
             ].copy()
             # 정수 변환 (소수점 제거) + 28일후부족은 음수로 표기 (부족량 강조)
+            for _c in ["pool_velocity", "reproduction_demand", "shortfall"]:
+                display[_c] = pd.to_numeric(display[_c], errors="coerce").fillna(0)
             display["pool_velocity"] = display["pool_velocity"].round(0).astype(int)
             display["reproduction_demand"] = display["reproduction_demand"].round(0).astype(int)
             display["shortfall"] = (-display["shortfall"]).round(0).astype(int)
