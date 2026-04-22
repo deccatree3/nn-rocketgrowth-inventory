@@ -781,7 +781,12 @@ if _is_new:
                     "reproduction_demand",
                     "shortfall",
                 ]
-            ].rename(
+            ].copy()
+            # 정수 변환 (소수점 제거) + 28일후부족은 음수로 표기 (부족량 강조)
+            display["pool_velocity"] = display["pool_velocity"].round(0).astype(int)
+            display["reproduction_demand"] = display["reproduction_demand"].round(0).astype(int)
+            display["shortfall"] = (-display["shortfall"]).round(0).astype(int)
+            display = display.rename(
                 columns={
                     "parent_wms_barcode": "WMS바코드",
                     "single_product": "상품명",
@@ -793,7 +798,11 @@ if _is_new:
                     "shortfall": f"{reproduction_lead}일후부족",
                 }
             )
-            st.dataframe(display, use_container_width=True, hide_index=True)
+            styled = display.style.map(
+                lambda v: "color: red; font-weight: bold;" if isinstance(v, (int, float)) and v < 0 else "",
+                subset=[f"{reproduction_lead}일후부족"],
+            )
+            st.dataframe(styled, use_container_width=True, hide_index=True)
             st.warning(
                 f"⚠️ {len(repro_list)}개 단품이 재생산 리드타임({reproduction_lead}일) 동안 버티지 못합니다. "
                 "생산/발주 담당자에게 알리거나 이번 밀크런 수량을 조정하세요."
