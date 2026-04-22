@@ -1734,10 +1734,29 @@ else:
         with st.expander("📦 3. 재고차감 (3차 결과물)", expanded=(_mgmt_status == "verified")):
             _order_base3 = (_invoice.order_id if _invoice and _invoice.order_id else None) or (_mgmt_plan.milkrun_id or "")
 
+            _os_uploaded = "order_search" in _mgmt_files
+            _os_guide_html = (
+                '<table style="border-collapse: collapse; width: 100%;">'
+                '<thead><tr>'
+                '<th style="text-align:left;">구분</th>'
+                '<th style="text-align:left;">취합 경로</th>'
+                '<th style="width:90px; text-align:center; white-space:nowrap;">취합여부</th>'
+                '</tr></thead>'
+                '<tbody><tr>'
+                '<td>확장주문검색 파일</td>'
+                '<td>이지어드민 &gt; 주문관리 &gt; 확장주문검색2 &gt; 판매처 - 로켓그로스(서현커머스) &gt; 다운로드 포맷 [내뉴]발주서 &gt; 다운로드</td>'
+                f'<td style="width:90px; text-align:center; white-space:nowrap;">{"✅" if _os_uploaded else ""}</td>'
+                '</tr></tbody>'
+                '</table>'
+            )
+            _os_guide_ph = st.empty()
+            _os_guide_ph.markdown(_os_guide_html, unsafe_allow_html=True)
+
             _os_file = st.file_uploader(
                 "확장주문검색 파일 업로드",
                 type=["xls", "xlsx"],
                 key=f"mgmt_os_{_selected_plan_id}",
+                label_visibility="collapsed",
             )
             if not _os_file and "order_search" in _mgmt_files:
                 _osn, _osb = _mgmt_files["order_search"]
@@ -1749,6 +1768,15 @@ else:
                 _os_name = getattr(_os_file, 'name', 'order_search.xls')
                 if "order_search" not in _mgmt_files:
                     _save_plan_files(_selected_plan_id, {"order_search": (_os_name, _os_bytes)})
+                # 방금 업로드된 경우도 가이드 테이블에 ✅ 반영
+                _os_uploaded = True
+                _os_guide_ph.markdown(
+                    _os_guide_html.replace(
+                        'style="width:90px; text-align:center; white-space:nowrap;"></td>',
+                        'style="width:90px; text-align:center; white-space:nowrap;">✅</td>',
+                    ),
+                    unsafe_allow_html=True,
+                )
 
                 try:
                     _os_rows = parse_order_search_file(_os_bytes)
