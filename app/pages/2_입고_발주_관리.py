@@ -902,7 +902,8 @@ if _is_new:
 
     st.caption(
         f"표시: {len(view)} / 전체 {len(allocated_df)} · "
-        f"확정수량을 편집하면 같은 부모 풀의 다른 아이템 '가능수량'이 재계산됩니다."
+        f"확정수량을 편집하면 같은 부모 풀의 다른 아이템 '가능수량'이 재계산됩니다. · "
+        "🟦 청록 셀 = 팔레트 꽉 채움으로 기본 추천보다 증가한 SKU · 🟥 빨강 셀 = 부모 풀 초과"
     )
 
     display_cols = [
@@ -929,10 +930,12 @@ if _is_new:
     DEFAULT_CONFIRM_BG = "#fff8d6"  # 옅은 노랑 — 입력 컬럼 강조
     OVER_CONFIRM_BG = "background-color: #ff6b6b; color: white; font-weight: bold;"
     OVER_STOCK_BG = "background-color: #ffe5e5;"
+    # 팔레트 꽉 채움으로 증가한 SKU 강조 (옅은 청록)
+    PALLET_ADJUSTED_BG = "background-color: #cceeff; font-weight: bold;"
 
 
     def _highlight_over(row):
-        """재고 over 시 빨강 덮어쓰기. 정상이면 빈 스타일 (set_properties 의 노랑이 보존됨)."""
+        """재고 over → 빨강, 팔레트조정 → 청록, 정상 → 기본 노랑."""
         styles = [""] * len(row)
         pool_rem = row.get("pool_remaining_base")
         status = row.get("selected_status")
@@ -940,13 +943,33 @@ if _is_new:
             (pool_rem is not None and not (isinstance(pool_rem, float) and pd.isna(pool_rem)) and pool_rem < 0)
             or status == "insufficient"
         )
+        cols = list(row.index)
         if is_over:
-            cols = list(row.index)
             if "inbound_final" in cols:
                 styles[cols.index("inbound_final")] = OVER_CONFIRM_BG
             for col in ("pool_remaining_base", "pool_remaining_bundle"):
                 if col in cols:
                     styles[cols.index(col)] = OVER_STOCK_BG
+        else:
+            # 팔레트 꽉 채움으로 증가한 경우 구분 표시
+            try:
+                inbound_final = row.get("inbound_final")
+                basic_boxes = row.get("basic_boxes")
+                box_qty = row.get("box_qty")
+                if (
+                    inbound_final is not None
+                    and not (isinstance(inbound_final, float) and pd.isna(inbound_final))
+                    and basic_boxes is not None
+                    and not (isinstance(basic_boxes, float) and pd.isna(basic_boxes))
+                    and box_qty
+                    and int(inbound_final) != int(basic_boxes) * int(box_qty)
+                ):
+                    if "inbound_final" in cols:
+                        styles[cols.index("inbound_final")] = PALLET_ADJUSTED_BG
+                    if "confirmed_boxes" in cols:
+                        styles[cols.index("confirmed_boxes")] = PALLET_ADJUSTED_BG
+            except (ValueError, TypeError):
+                pass
         return styles
 
 
