@@ -804,8 +804,8 @@ if _is_new:
             )
             st.dataframe(styled, use_container_width=True, hide_index=True)
             st.warning(
-                f"⚠️ {len(repro_list)}개 단품이 재생산 리드타임({reproduction_lead}일) 동안 버티지 못합니다. "
-                "생산/발주 담당자에게 알리거나 이번 밀크런 수량을 조정하세요."
+                f"⚠️ {len(repro_list)}개 품목이 재생산 리드타임({reproduction_lead}일) 동안 버티지 못합니다. "
+                "생산/발주 담당자에게 재발주 검토를 요청해주세요."
             )
 
 
