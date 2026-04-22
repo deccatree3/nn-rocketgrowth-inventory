@@ -1654,21 +1654,7 @@ else:
                     with _dc[2]:
                         st.error(str(e))
 
-            # 이지어드민 재고차감
-            st.markdown("#### 이지어드민 재고차감")
-            _ea = st.columns(3)
-            try:
-                _ord = build_order_form(_sec_items, _fc, str(_order_base).strip(), pallet_assignment=_pa)
-                with _ea[0]:
-                    st.download_button("📥 발주서양식", data=_ord,
-                        file_name=f"밀크런재고차감_로켓그로스({cfg.default_company_name}커머스)발주서양식_{_datesuf}.xlsx",
-                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                        use_container_width=True, type="primary")
-            except Exception as e:
-                with _ea[0]:
-                    st.error(str(e))
-
-            # PDF 리네임
+            # PDF 리네임 (물류센터 전달 파일에 포함)
             _dpc = st.columns(3)
             if _ib:
                 with _dpc[0]:
@@ -1683,6 +1669,20 @@ else:
                 st.download_button("📥 물류부착문서(팔레트부착)", data=_ab,
                     file_name=f"밀크런_물류부착문서1 (팔레트부착문서)_{_fc}_{_datesuf}.pdf", mime="application/pdf",
                     use_container_width=True, type="primary")
+
+            # 이지어드민 재고차감
+            st.markdown("#### 이지어드민 재고차감")
+            _ea = st.columns(3)
+            try:
+                _ord = build_order_form(_sec_items, _fc, str(_order_base).strip(), pallet_assignment=_pa)
+                with _ea[0]:
+                    st.download_button("📥 발주서양식", data=_ord,
+                        file_name=f"밀크런재고차감_로켓그로스({cfg.default_company_name}커머스)발주서양식_{_datesuf}.xlsx",
+                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                        use_container_width=True, type="primary")
+            except Exception as e:
+                with _ea[0]:
+                    st.error(str(e))
 
             # 발주 확정
             if _mgmt_status == "draft":
