@@ -330,21 +330,30 @@ if _is_new:
         # 신규 계획 모드
         # ====================================================================
 
-        # --- 1. 파일 업로드 -------------------------------------------------------
-    st.subheader("1. 파일 업로드")
+        # --- 1. 기초자료 업로드 ---------------------------------------------------
+    st.subheader("1. 기초자료 업로드")
 
     from lib.file_classifier import (
         FILE_TYPE_COUPANG, FILE_TYPE_WMS, FILE_TYPE_TEMPLATE, FILE_TYPE_MOVEMENT,
         FILE_TYPE_LABELS, CompanyFileGroup, classify_uploaded_files,
     )
 
+    st.markdown(
+        """
+        업로드할 파일 4종 (여러 업체 파일 섞어 올려도 자동 분류):
+        1) 다원WMS > 재고관리 > 창고별로케이션별재고(OWNER) > [품목-정상·불량-로케이션-로트] 탭 > 검색 > 우클릭, Export(Excel)
+        2) 쿠팡Wing > 로켓그로스 > 재고현황 > 엑셀 다운로드
+        3) 쿠팡Wing > 로켓그로스 > 입고관리 > 새로운 입고 생성 > 엑셀 다운로드
+        4) 이번달 '쿠팡 재고이동건' 파일
+        """
+    )
+
     uploaded_files = st.file_uploader(
-        "파일을 한번에 올려주세요 (여러 업체 가능)",
+        "파일 업로드",
         type=["xlsx", "xls"],
         accept_multiple_files=True,
         key="multi_upload",
-        help="업체별 4종: 쿠팡 재고현황 / WMS 재고현황 / 쿠팡 업로드양식 / 재고이동건\n\n"
-        "여러 업체 파일을 섞어 올려도 내용으로 자동 분류합니다.",
+        label_visibility="collapsed",
     )
 
     if not uploaded_files:
