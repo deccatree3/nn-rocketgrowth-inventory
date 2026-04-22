@@ -280,8 +280,6 @@ STATUS_LABELS = {"draft": "📝 임시저장", "verified": "✅ 발주확정", "
 st.set_page_config(page_title="입고 발주 관리", page_icon="📦", layout="wide")
 st.title("📦 입고 발주 관리")
 
-st.caption("밀크런 입고 대상 SKU의 발주 수량을 확정하고 부모 재고 풀을 관리합니다.")
-
 cfg = load_config()
 
 # 엔진 파라미터 로드 + 표시
