@@ -648,13 +648,15 @@ if _is_new:
             rounding="up",
             cap_per_sku=2,
         )
-        # 결과 주입
+        # 결과 주입 — 팔레트 최적화가 켜져있으면 confirmed(=inbound_final) 기본값도 팔레트 값으로
         for i, row in base_df.iterrows():
             key = int(row["coupang_option_id"])
             opt_boxes = int(pallet_result.optimized_boxes.get(key, row["basic_boxes"] or 0))
+            opt_qty = opt_boxes * int(row["box_qty"] or 1)
             base_df.at[i, "pallet_boxes"] = opt_boxes
-            base_df.at[i, "inbound_pallet"] = opt_boxes * int(row["box_qty"] or 1)
+            base_df.at[i, "inbound_pallet"] = opt_qty
             base_df.at[i, "pallet_adjusted"] = opt_boxes != int(row["basic_boxes"] or 0)
+            base_df.at[i, "inbound_final"] = opt_qty  # 확정수량 기본값 = 팔레트 최적화 결과
     else:
         pallet_result = None
 
