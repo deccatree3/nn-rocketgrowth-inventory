@@ -900,12 +900,6 @@ if _is_new:
     if status_filter:
         view = view[view["urgency"].isin(status_filter)]
 
-    st.caption(
-        f"표시: {len(view)} / 전체 {len(allocated_df)} · "
-        f"확정수량을 편집하면 같은 부모 풀의 다른 아이템 '가능수량'이 재계산됩니다. · "
-        "🟦 청록 셀 = 팔레트 꽉 채움으로 기본 추천보다 증가한 SKU · 🟥 빨강 셀 = 부모 풀 초과"
-    )
-
     display_cols = [
         "coupang_option_id",  # 내부 키 (숨김)
         "urgency",            # 상태 — 맨 앞 (pinned)
