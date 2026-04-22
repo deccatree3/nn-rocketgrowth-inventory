@@ -729,40 +729,42 @@ def build_order_form(
     컬럼: 순서, 주문번호, 상품명, 수량, 수령인, 연락처, 주소, 비고
     주문번호 = f"{요청ID}_{seq}"
     행 순서 = 취합리스트와 동일 (팔레트 순회 기준 SKU 첫 등장 순서)
+
+    xlsxwriter 사용 — Excel-native 포맷 출력. openpyxl 기본 출력은 workbook.xml
+    의 XML 선언 누락 등으로 이지어드민 파서가 거부하는 경우 있음.
     """
-    wb = openpyxl.Workbook()
-    ws = wb.active
-    ws.title = "Sheet1"
+    import xlsxwriter  # noqa: WPS433
 
     receiver = RECEIVER_NAME_FMT.format(fc=fc_name)
     phone = RECEIVER_PHONE
     address = RECEIVER_ADDRESS
-
-    headers = ["순서", "주문번호", "상품명", "수량", "수령인", "연락처", "주소", "비고"]
-    for i, h in enumerate(headers, start=1):
-        ws.cell(row=1, column=i, value=h)
 
     ordered = (
         order_form_sequence(items, pallet_assignment)
         if pallet_assignment else [it for it in items if it.inbound_qty > 0]
     )
 
-    for seq, it in enumerate(ordered, start=1):
-        row = seq + 1
-        ws.cell(row=row, column=1, value=seq)
-        ws.cell(row=row, column=2, value=f"{order_number_base}_{seq}" if order_number_base else str(seq))
-        ws.cell(row=row, column=3, value=it.product_name or "")
-        ws.cell(row=row, column=4, value=int(it.inbound_qty))
-        ws.cell(row=row, column=5, value=receiver)
-        ws.cell(row=row, column=6, value=phone)
-        ws.cell(row=row, column=7, value=address)
-
     buf = BytesIO()
-    wb.save(buf)
+    wb = xlsxwriter.Workbook(buf, {"in_memory": True})
+    ws = wb.add_worksheet("Sheet1")
+
+    headers = ["순서", "주문번호", "상품명", "수량", "수령인", "연락처", "주소", "비고"]
+    for c, h in enumerate(headers):
+        ws.write_string(0, c, h)
+
+    for seq, it in enumerate(ordered, start=1):
+        r = seq  # 0-indexed row in xlsxwriter; header is row 0
+        ws.write_number(r, 0, seq)
+        ws.write_string(r, 1, f"{order_number_base}_{seq}" if order_number_base else str(seq))
+        ws.write_string(r, 2, it.product_name or "")
+        ws.write_number(r, 3, int(it.inbound_qty))
+        ws.write_string(r, 4, receiver)
+        ws.write_string(r, 5, phone)
+        ws.write_string(r, 6, address)
+
     wb.close()
     buf.seek(0)
-    # 이지어드민 파서 호환 — inlineStr 을 sharedStrings 로 변환
-    return _convert_inline_to_shared_strings(buf.getvalue())
+    return buf.getvalue()
 
 
 # ============================================================================
