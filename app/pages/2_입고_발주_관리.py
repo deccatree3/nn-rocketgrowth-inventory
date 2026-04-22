@@ -1065,26 +1065,30 @@ if _is_new:
         st.info(f"ℹ️ {len(no_parent)}개 SKU: 부모 WMS 바코드 매핑 없음. 제품 마스터에서 연결하세요.")
 
     # --- 9. 요약 & 액션 -------------------------------------------------------
-    # 확정 수량 기반
-    confirmed_qty = int(edited["inbound_final"].fillna(0).sum())
+    # 확정 수량 기반 — allocated_df(전체) + edited(필터 영역의 사용자 편집) 병합
+    # 기존에 edited 만 썼더니 상태 필터로 숨겨진 SKU 가 누락되어 총합이 과소 계산됐음
+    _edited_qty_by_opt = {
+        int(r["coupang_option_id"]): (None if pd.isna(r.get("inbound_final")) else int(r["inbound_final"]))
+        for _, r in edited.iterrows()
+    }
+    confirmed_qty = 0
     confirmed_boxes_sum = 0
     active_cnt = 0
     total_weight_g = 0  # 총중량 (g)
-    for _, r in edited.iterrows():
-        qty_raw = r.get("inbound_final")
-        qty = 0
-        if qty_raw is not None and not (isinstance(qty_raw, float) and pd.isna(qty_raw)):
-            qty = int(qty_raw)
+    for _, r in allocated_df.iterrows():
+        opt_id = int(r["coupang_option_id"])
+        if opt_id in _edited_qty_by_opt:
+            qty = _edited_qty_by_opt[opt_id] or 0
+        else:
+            raw = r.get("inbound_final")
+            qty = int(raw) if raw is not None and not (isinstance(raw, float) and pd.isna(raw)) else 0
         if qty > 0:
             active_cnt += 1
             box = int(r.get("box_qty") or 1)
             boxes = qty // max(box, 1)
+            confirmed_qty += qty
             confirmed_boxes_sum += boxes
-            # 중량 계산: weight_g 는 allocated_df 에서 가져오기 (edited 에는 없을 수 있음)
-            opt_id = int(r["coupang_option_id"])
-            ar = allocated_df[allocated_df["coupang_option_id"] == opt_id]
-            unit_w = int(ar.iloc[0]["weight_g"] or 0) if len(ar) > 0 else 0
-            # (단위중량 × 확정수량 + 500 × 박스수)
+            unit_w = int(r.get("weight_g") or 0)
             total_weight_g += unit_w * qty + 500 * boxes
 
     total_weight_kg = total_weight_g / 1000
