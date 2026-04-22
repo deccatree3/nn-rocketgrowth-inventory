@@ -351,6 +351,8 @@ if _is_new:
          "이번달 '쿠팡 재고이동건' 파일"),
     ]
     _GUIDE_COMPANIES = ["캐처스", "서현"]
+    # 업체별로 해당 파일 타입이 불필요(음영 처리)한 조합
+    _GUIDE_NA = {("캐처스", FILE_TYPE_MOVEMENT)}
 
     def _render_upload_guide(groups: dict | None):
         comp_header = "".join(
@@ -360,6 +362,12 @@ if _is_new:
         for label, ft, path in _UPLOAD_GUIDE_ROWS:
             marks = ""
             for c in _GUIDE_COMPANIES:
+                if (c, ft) in _GUIDE_NA:
+                    marks += (
+                        '<td style="width:90px; text-align:center; white-space:nowrap; '
+                        'background-color:#eee; color:#888;">—</td>'
+                    )
+                    continue
                 g = groups.get(c) if groups else None
                 mark = "✅" if g and ft in g.files else ""
                 marks += f'<td style="width:90px; text-align:center; white-space:nowrap;">{mark}</td>'
@@ -422,12 +430,21 @@ if _is_new:
     template_file = grp.files.get(FILE_TYPE_TEMPLATE)
     movement_file = grp.files.get(FILE_TYPE_MOVEMENT)
 
-    if grp.missing_types:
-        missing_labels = [FILE_TYPE_LABELS[ft] for ft in grp.missing_types]
+    # 업체별 선택사항 파일 (예: 캐처스는 재고이동건 불필요)
+    _optional_by_company = {"캐처스": {FILE_TYPE_MOVEMENT}}
+    _optional_for_this = _optional_by_company.get(selected_company, set())
+
+    _missing_required = [ft for ft in grp.missing_types if ft not in _optional_for_this]
+    if _missing_required:
+        missing_labels = [FILE_TYPE_LABELS[ft] for ft in _missing_required]
         st.info(f"**{selected_company}** 미감지 파일: {', '.join(missing_labels)}")
 
-    if not (coupang_file and wms_file and template_file and movement_file):
-        st.warning(f"**{selected_company}** 의 4개 파일이 모두 필요합니다.")
+    _required_ok = coupang_file and wms_file and template_file and (
+        movement_file or FILE_TYPE_MOVEMENT in _optional_for_this
+    )
+    if not _required_ok:
+        _need = 3 if FILE_TYPE_MOVEMENT in _optional_for_this else 4
+        st.warning(f"**{selected_company}** 의 필수 파일 {_need}종이 모두 필요합니다.")
         st.stop()
 
 
