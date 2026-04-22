@@ -747,19 +747,20 @@ if _is_new:
         (pool_stats["shortfall"] > 0) | (pool_stats["allocated_base"] > pool_stats["pool_total"])
     )
 
-    # 번들 포함 여부 — 단품만 알림 대상
-    pool_has_bundle = (
-        allocated_df[allocated_df["parent_wms_barcode"].notna()]
-        .assign(_uq=lambda d: d["unit_qty"].fillna(1).astype(int))
-        .groupby("parent_wms_barcode", sort=False)["_uq"]
-        .apply(lambda s: (s >= 2).any())
+    # 풀 내 '단품 SKU' 상품명을 대표로 선택 (단품이 실제 생산·재발주 대상)
+    single_product_per_pool = (
+        allocated_df[
+            (allocated_df["parent_wms_barcode"].notna())
+            & (allocated_df["unit_qty"].fillna(1).astype(int) == 1)
+        ]
+        .groupby("parent_wms_barcode", sort=False)["product_name"]
+        .first()
     )
-    pool_stats["has_bundle"] = pool_stats["parent_wms_barcode"].map(pool_has_bundle).fillna(False)
+    pool_stats["single_product"] = (
+        pool_stats["parent_wms_barcode"].map(single_product_per_pool).fillna(pool_stats["first_product"])
+    )
 
-    repro_list = (
-        pool_stats[pool_stats["needs_reproduction"] & ~pool_stats["has_bundle"]]
-        .sort_values("shortfall", ascending=False)
-    )
+    repro_list = pool_stats[pool_stats["needs_reproduction"]].sort_values("shortfall", ascending=False)
 
     with st.expander(
         "🏭 재발주 필요 품목 Check"
@@ -772,7 +773,7 @@ if _is_new:
             display = repro_list[
                 [
                     "parent_wms_barcode",
-                    "first_product",
+                    "single_product",
                     "pool_total",
                     "allocated_base",
                     "pool_remaining",
@@ -780,7 +781,7 @@ if _is_new:
             ].rename(
                 columns={
                     "parent_wms_barcode": "WMS바코드",
-                    "first_product": "상품명",
+                    "single_product": "상품명",
                     "pool_total": "현재고",
                     "allocated_base": "이번출고",
                     "pool_remaining": "출고후잔여",
