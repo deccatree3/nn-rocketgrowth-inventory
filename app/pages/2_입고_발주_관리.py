@@ -394,18 +394,6 @@ if _is_new:
     classified, company_groups = classify_uploaded_files(uploaded_files)
     _guide_ph.markdown(_render_upload_guide(company_groups), unsafe_allow_html=True)
 
-    # 분류 결과 표시
-    if company_groups:
-        st.success(f"**{len(company_groups)}개 업체** 감지: {', '.join(company_groups.keys())}")
-        for comp, grp in company_groups.items():
-            icons = []
-            for ft in [FILE_TYPE_COUPANG, FILE_TYPE_WMS, FILE_TYPE_TEMPLATE, FILE_TYPE_MOVEMENT]:
-                if ft in grp.files:
-                    icons.append(f"✅ {FILE_TYPE_LABELS[ft]}")
-                else:
-                    icons.append(f"❌ {FILE_TYPE_LABELS[ft]}")
-            st.caption(f"**{comp}**: " + " · ".join(icons))
-
     # 미분류 파일 경고
     unclassified = [cf for cf in classified if not cf.company]
     if unclassified:
