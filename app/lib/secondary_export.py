@@ -653,11 +653,11 @@ def _convert_inline_to_shared_strings(xlsx_bytes: bytes) -> bytes:
     if not shared:
         return xlsx_bytes
 
-    # sharedStrings.xml 생성
+    # sharedStrings.xml 생성 (성공 샘플 포맷에 맞춤 — xml:space 속성 불필요)
     items_xml = "".join(
-        f"<si><t xml:space=\"preserve\">{_xml_escape(s)}</t></si>" for s, _ in sorted(shared.items(), key=lambda x: x[1])
+        f"<si><t>{_xml_escape(s)}</t></si>" for s, _ in sorted(shared.items(), key=lambda x: x[1])
     )
-    total = len(shared)  # inlineStr 셀 1개당 1번씩 참조 (정확한 count 는 복잡하므로 unique=total 사용)
+    total = len(shared)
     files["xl/sharedStrings.xml"] = (
         '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n'
         f'<sst xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" '
