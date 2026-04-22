@@ -353,19 +353,30 @@ if _is_new:
     _GUIDE_COMPANIES = ["캐처스", "서현"]
 
     def _render_upload_guide(groups: dict | None):
-        header = "| 구분 | 취합 경로 | " + " | ".join(_GUIDE_COMPANIES) + " |"
-        sep = "|------|----------|" + "".join([":--:|"] * len(_GUIDE_COMPANIES))
-        lines = [header, sep]
+        comp_header = "".join(
+            f'<th style="width:60px; text-align:center;">{c}</th>' for c in _GUIDE_COMPANIES
+        )
+        body = ""
         for label, ft, path in _UPLOAD_GUIDE_ROWS:
-            marks = []
+            marks = ""
             for c in _GUIDE_COMPANIES:
                 g = groups.get(c) if groups else None
-                marks.append("✅" if g and ft in g.files else "")
-            lines.append(f"| {label} | {path} | " + " | ".join(marks) + " |")
-        return "\n".join(lines)
+                mark = "✅" if g and ft in g.files else ""
+                marks += f'<td style="width:60px; text-align:center;">{mark}</td>'
+            body += f"<tr><td>{label}</td><td>{path}</td>{marks}</tr>"
+        return (
+            '<table style="border-collapse: collapse; width: 100%;">'
+            '<thead><tr>'
+            '<th style="text-align:left;">구분</th>'
+            '<th style="text-align:left;">취합 경로</th>'
+            f'{comp_header}'
+            '</tr></thead>'
+            f'<tbody>{body}</tbody>'
+            '</table>'
+        )
 
     _guide_ph = st.empty()
-    _guide_ph.markdown(_render_upload_guide(None))
+    _guide_ph.markdown(_render_upload_guide(None), unsafe_allow_html=True)
 
     uploaded_files = st.file_uploader(
         "파일 업로드",
@@ -381,7 +392,7 @@ if _is_new:
 
     # 자동 분류
     classified, company_groups = classify_uploaded_files(uploaded_files)
-    _guide_ph.markdown(_render_upload_guide(company_groups))
+    _guide_ph.markdown(_render_upload_guide(company_groups), unsafe_allow_html=True)
 
     # 분류 결과 표시
     if company_groups:
