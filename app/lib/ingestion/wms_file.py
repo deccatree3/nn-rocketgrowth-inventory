@@ -86,33 +86,67 @@ def _infer_snapshot_date(filename: str) -> date:
     return date.today()
 
 
+_HEADER_ALIASES = {
+    "barcode": ["품목코드"],
+    "product_name": ["품목명"],
+    "loc_group": ["LOC그룹"],
+    "loc": ["LOC"],
+    "total_qty": ["재고수량"],
+    "alloc_qty": ["할당수량"],
+    "available_qty": ["가능수량"],
+    "expiry": ["속성5(유통일)", "속성5", "유통일"],
+}
+
+
+def _resolve_headers(header_row: list) -> dict[str, int]:
+    """헤더 row 를 읽어서 필드 → 컬럼 인덱스 매핑 반환 (매핑 실패 시 폴백용 기본값 사용)."""
+    lookup: dict[str, int] = {}
+    for idx, cell in enumerate(header_row):
+        name = str(cell).strip() if cell is not None else ""
+        if not name:
+            continue
+        for field, aliases in _HEADER_ALIASES.items():
+            if name in aliases and field not in lookup:
+                lookup[field] = idx
+    return lookup
+
+
 def parse_wms_inventory_file(path: str | Path) -> WmsSnapshot:
     """WMS Document_*.xls 를 파싱하여 WmsSnapshot 반환.
 
     각 raw row = 1 LOC/LOT. expiry_short 에 해당 배치의 유통일(속성5)을 넣는다.
     expiry_long 은 사용하지 않는다(배치 구분은 expiry_short 기준).
+
+    컬럼 인덱스는 헤더명으로 동적 매핑한다 (업체·쿼리별 컬럼 순서 차이 대응).
     """
     path = Path(path)
     wb = xlrd.open_workbook(str(path))
     ws = wb.sheet_by_index(0)
     datemode = wb.datemode
 
+    header = ws.row_values(0) if ws.nrows > 0 else []
+    cols = _resolve_headers(header)
+
+    def _get(row: list, field: str, fallback_idx: int):
+        idx = cols.get(field, fallback_idx)
+        return row[idx] if 0 <= idx < len(row) else None
+
     rows: list[WmsInventoryRow] = []
     for i in range(1, ws.nrows):
         r = ws.row_values(i)
-        barcode = _to_str_opt(r[0] if len(r) > 0 else None)
+        barcode = _to_str_opt(_get(r, "barcode", 0))
         if not barcode:
             continue
 
         row = WmsInventoryRow(
             barcode=barcode,
-            product_name=_to_str_opt(r[1] if len(r) > 1 else None),
-            loc_group=_to_str_opt(r[3] if len(r) > 3 else None),
-            loc=_to_str_opt(r[5] if len(r) > 5 else None),
-            total_qty=_to_int(r[6] if len(r) > 6 else None),
-            alloc_qty=_to_int(r[7] if len(r) > 7 else None),
-            available_qty=_to_int(r[11] if len(r) > 11 else None),
-            expiry_short=_excel_serial_to_date(r[17] if len(r) > 17 else None, datemode),
+            product_name=_to_str_opt(_get(r, "product_name", 1)),
+            loc_group=_to_str_opt(_get(r, "loc_group", 3)),
+            loc=_to_str_opt(_get(r, "loc", 5)),
+            total_qty=_to_int(_get(r, "total_qty", 6)),
+            alloc_qty=_to_int(_get(r, "alloc_qty", 7)),
+            available_qty=_to_int(_get(r, "available_qty", 11)),
+            expiry_short=_excel_serial_to_date(_get(r, "expiry", 17), datemode),
             expiry_long=None,  # 단일 배치 유통일만 사용
             raw={str(j): (str(v) if v not in (None, "") else None) for j, v in enumerate(r)},
         )
