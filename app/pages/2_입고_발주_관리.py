@@ -1619,7 +1619,7 @@ else:
             _datesuf = _arr.strftime("%Y%m%d")
             _yyyymm = _arr.strftime("%Y_%m월")
 
-            _dc = st.columns(4)
+            _dc = st.columns(3)
             try:
                 _cons = build_consolidation_list(_sec_items, _pa, _fc, _arr, cfg.default_company_name,
                     _invoice.order_id if _invoice and _invoice.order_id else _attachment.milkrun_id)
@@ -1653,15 +1653,19 @@ else:
                 except Exception as e:
                     with _dc[2]:
                         st.error(str(e))
+
+            # 이지어드민 재고차감
+            st.markdown("#### 이지어드민 재고차감")
+            _ea = st.columns(3)
             try:
                 _ord = build_order_form(_sec_items, _fc, str(_order_base).strip(), pallet_assignment=_pa)
-                with _dc[3]:
+                with _ea[0]:
                     st.download_button("📥 발주서양식", data=_ord,
                         file_name=f"밀크런재고차감_로켓그로스({cfg.default_company_name}커머스)발주서양식_{_datesuf}.xlsx",
                         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                         use_container_width=True, type="primary")
             except Exception as e:
-                with _dc[3]:
+                with _ea[0]:
                     st.error(str(e))
 
             # PDF 리네임
