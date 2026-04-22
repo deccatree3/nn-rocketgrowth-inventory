@@ -602,25 +602,23 @@ if _is_new:
     base_df = pd.DataFrame(rows)
 
     # --- 4-2. 팔레트 최적화 (토글) ----------------------------------------------
-    _pallet_row = st.columns([4, 1])
-    with _pallet_row[0]:
-        pallet_on = st.checkbox(
-            f"🚛 팔레트 단위 최적화 (1팔레트 = {cfg.pallet_size_boxes}박스)",
-            value=True,
-            help=(
-                f"보호영역(긴급/보충)은 그대로 두고, 안정영역 SKU 박스수를 조정해 총 박스수가 "
-                f"{cfg.pallet_size_boxes}의 배수가 되도록 **항상 올림**으로 맞춥니다. "
-                "물리적 풀 잔여 범위 안에서 무조건 팔레트를 꽉 채웁니다."
-            ),
-        )
-    with _pallet_row[1]:
-        if st.button("🔄 추천값으로 초기화", help="확정수량을 팔레트 최적화 추천값으로 되돌립니다 (편집 전 상태)", use_container_width=True):
-            _ssk_prefix = "inbound_final_by_opt::"
-            for _k in list(st.session_state.keys()):
-                if isinstance(_k, str) and _k.startswith(_ssk_prefix):
-                    st.session_state.pop(_k, None)
-            st.session_state.pop("inbound_final_by_opt", None)
-            st.rerun()
+    pallet_on = st.checkbox(
+        f"🚛 팔레트 단위 최적화 (1팔레트 = {cfg.pallet_size_boxes}박스)",
+        value=True,
+        help=(
+            f"체크 시: 총 박스수가 {cfg.pallet_size_boxes}의 배수가 되도록 항상 올림하여 팔레트를 꽉 채움. "
+            "체크 해제 시: 엔진 기본 추천값 그대로 사용 (팔레트 미충족 가능)."
+        ),
+    )
+
+    # 팔레트 토글이 바뀌면 편집 세션 잔재 제거 — 바뀐 추천값이 그대로 반영되도록
+    _prev_pallet_on = st.session_state.get("_pallet_on_prev")
+    if _prev_pallet_on is not None and _prev_pallet_on != pallet_on:
+        for _k in list(st.session_state.keys()):
+            if isinstance(_k, str) and _k.startswith("inbound_final_by_opt::"):
+                st.session_state.pop(_k, None)
+        st.session_state.pop("inbound_final_by_opt", None)
+    st.session_state["_pallet_on_prev"] = pallet_on
 
     if pallet_on:
         # 부모 풀 초기 잔여 (basic 반영 전 — 전체 가용 낱개)
