@@ -1169,7 +1169,7 @@ if _is_new:
                 st.caption("조정 없음")
 
     st.divider()
-    st.subheader("쿠팡 입고생성 업로드 파일 생성")
+    st.subheader("3. 쿠팡 입고생성 업로드 파일 생성")
 
     # export_items 준비 — allocated_df 전체 사용 (필터와 무관)
     # edited (필터된 view) 에서 수정된 inbound_final 을 allocated_df 에 반영
