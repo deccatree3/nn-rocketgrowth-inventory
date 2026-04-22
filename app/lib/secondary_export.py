@@ -754,9 +754,11 @@ def build_order_form(
 
     for seq, it in enumerate(ordered, start=1):
         r = seq  # 0-indexed row in xlsxwriter; header is row 0
+        # 상품명: 취합리스트와 동일 — WMS 제품명 우선, 없으면 쿠팡 product_name
+        name = it.wms_product_name or it.product_name or ""
         ws.write_number(r, 0, seq)
         ws.write_string(r, 1, f"{order_number_base}_{seq}" if order_number_base else str(seq))
-        ws.write_string(r, 2, it.product_name or "")
+        ws.write_string(r, 2, name)
         ws.write_number(r, 3, int(it.inbound_qty))
         ws.write_string(r, 4, receiver)
         ws.write_string(r, 5, phone)
