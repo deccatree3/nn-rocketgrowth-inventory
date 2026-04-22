@@ -607,8 +607,8 @@ if _is_new:
         value=True,
         help=(
             f"보호영역(긴급/보충)은 그대로 두고, 안정영역 SKU 박스수를 조정해 총 박스수가 "
-            f"{cfg.pallet_size_boxes}의 배수가 되도록 맞춥니다. 항상 올림(팔레트 꽉 채움) 기본. "
-            "한 SKU 에 최대 +2박스 까지만 추가하여 쏠림을 방지합니다."
+            f"{cfg.pallet_size_boxes}의 배수가 되도록 **항상 올림**으로 맞춥니다. "
+            "물리적 풀 잔여 범위 안에서 무조건 팔레트를 꽉 채웁니다."
         ),
     )
 
@@ -644,9 +644,9 @@ if _is_new:
             pallet_items,
             initial_pools,
             pallet_size=cfg.pallet_size_boxes,
-            overstock_days=cfg.overstock_days,
+            overstock_days=None,    # 과잉재고 상한 제거 — 무조건 팔레트 꽉 채움
             rounding="up",
-            cap_per_sku=2,
+            cap_per_sku=None,       # 쏠림 상한 제거
         )
         # 결과 주입 — 팔레트 최적화가 켜져있으면 confirmed(=inbound_final) 기본값도 팔레트 값으로
         for i, row in base_df.iterrows():

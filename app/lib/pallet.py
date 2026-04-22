@@ -75,16 +75,18 @@ def optimize_to_pallet(
     parent_pools_remaining: dict[str, int],
     *,
     pallet_size: int = 19,
-    overstock_days: int = 35,
+    overstock_days: int | None = None,
     rounding: str = "up",  # "up" (기본·항상 올림) | "down" | "auto"(legacy)
     rounddown_threshold: float = 0.5,
-    cap_per_sku: int = 2,
+    cap_per_sku: int | None = None,
 ) -> PalletResult:
     """items 의 basic_boxes 를 출발점으로 팔레트 단위에 맞춘 박스수를 산출.
 
     기본 동작(rounding='up'): 총 박스수가 pallet_size 배수가 되도록 **항상 올림**.
-    쏠림 방지를 위해 SKU 당 최대 cap_per_sku 박스 까지만 추가.
-    cap 도달 또는 overstock_days 상한, 부모 풀 여유 제약으로 못 채운 경우 unfilled 에 기록.
+    - cap_per_sku: SKU 당 최대 추가 박스수. None=무제한.
+    - overstock_days: 추가 후 예상 커버일수 상한. None=제약 없음.
+    - 부모 풀 낱개 여유(물리적 한계)는 항상 체크.
+    못 채운 경우 unfilled 에 기록.
 
     parent_pools_remaining 은 호출 시점의 잔여 낱개수 (원본은 수정하지 않음).
     """
@@ -168,14 +170,15 @@ def _apply_up(
     optimized: dict[Any, int],
     pools: dict[str, int],
     delta: int,
-    overstock_days: int,
+    overstock_days: int | None,
     adjustments: list[tuple[Any, int]],
     *,
-    cap_per_sku: int = 2,
+    cap_per_sku: int | None = None,
 ) -> int:
     """박스 +1씩 delta 번 추가. 실제 적용 박스수 반환.
 
-    cap_per_sku: 한 SKU 에 추가 가능한 최대 박스수(쏠림 방지).
+    cap_per_sku: 한 SKU 에 추가 가능한 최대 박스수(None=무제한).
+    overstock_days: 추가 후 커버일수 상한(None=제약 없음).
     """
     # 후보: flexible, 판매속도 > 0
     candidates = [
@@ -196,8 +199,8 @@ def _apply_up(
         i = 0
         while i < len(candidates) and applied < delta:
             it = candidates[i]
-            # 쏠림 상한 체크
-            if added_per_sku[it.key] >= cap_per_sku:
+            # 쏠림 상한 체크 (cap 설정된 경우만)
+            if cap_per_sku is not None and added_per_sku[it.key] >= cap_per_sku:
                 candidates.pop(i)
                 advanced = True
                 continue
@@ -269,17 +272,17 @@ def _can_add_box(
     item: PalletItem,
     optimized: dict[Any, int],
     pools: dict[str, int],
-    overstock_days: int,
+    overstock_days: int | None,
 ) -> bool:
-    """박스 1개 추가 가능 여부 — cover_days 상한 + 부모 풀 여유."""
+    """박스 1개 추가 가능 여부 — cover_days 상한(옵션) + 부모 풀 여유."""
     new_boxes = optimized[item.key] + 1
     new_qty = new_boxes * item.box_qty
-    # cover_days 상한: (현재총재고 + 추가된 수량) / velocity ≤ overstock_days
-    if item.velocity > 0:
+    # cover_days 상한: None 이면 제약 없음
+    if overstock_days is not None and item.velocity > 0:
         projected_cover = (item.current_total_stock + new_qty) / item.velocity
         if projected_cover > overstock_days:
             return False
-    # 부모 풀 여유: box_qty * unit_qty 이상 있어야 함
+    # 부모 풀 여유: 물리적 한계 — 항상 체크
     if item.parent_barcode:
         needed = item.box_qty * item.unit_qty
         if pools.get(item.parent_barcode, 0) < needed:
