@@ -43,18 +43,21 @@ def test_already_aligned_no_change():
 
 
 def test_up_rounding_small_gap():
-    """17박스 → 20박스 (올림, 3박스 추가)."""
+    """17박스 → 20박스 (올림, 3박스 추가). 보호영역(replenish) 도 basic>0 이면 +박스 후보."""
     items = [
-        _mk("A", urgency="replenish", basic_boxes=5),  # 보호 (고정)
+        _mk("A", urgency="replenish", basic_boxes=5),
         _mk("B", urgency="stable", basic_boxes=8, days_until_stockout=30),
         _mk("C", urgency="stable", basic_boxes=4, days_until_stockout=50),
     ]
     r = optimize_to_pallet(items, {"P1": 10000}, **DEFAULT_KW)
     assert r.mode == "up"
     assert r.total_boxes_after == 20
-    assert r.optimized_boxes["A"] == 5
-    assert r.optimized_boxes["B"] + r.optimized_boxes["C"] == 15
-    assert r.optimized_boxes["B"] > r.optimized_boxes["C"]  # B 가 더 급함(=30) → 더 많이
+    # basic 값은 유지(감소 금지)
+    assert r.optimized_boxes["A"] >= 5
+    assert r.optimized_boxes["B"] >= 8
+    assert r.optimized_boxes["C"] >= 4
+    # 안정영역(B, C) 이 보호영역(A) 보다 우선 배정되므로 B+C >= basic(12)+2
+    assert r.optimized_boxes["B"] + r.optimized_boxes["C"] >= 14
 
 
 def test_down_rounding_large_gap():
@@ -135,12 +138,25 @@ def test_bundle_consumes_more_pool():
     assert r.unfilled == 4
 
 
-def test_no_candidates_up_mode():
+def test_single_critical_fills_pallet():
+    """단일 critical SKU 도 basic>0 이면 팔레트 채우기 후보 — 감소 금지지만 추가는 허용."""
     items = [_mk("X", urgency="critical", basic_boxes=15)]
     r = optimize_to_pallet(items, {"P1": 10000}, **DEFAULT_KW)
     assert r.mode == "up"
-    assert r.unfilled == 5
-    assert r.optimized_boxes["X"] == 15
+    assert r.unfilled == 0
+    assert r.optimized_boxes["X"] == 20
+
+
+def test_basic_zero_never_added():
+    """basic_boxes=0 SKU 는 팔레트 채우기 용도로 새로 끼워 넣지 않음."""
+    items = [
+        _mk("A", urgency="stable", basic_boxes=15, days_until_stockout=30),
+        _mk("Z", urgency="stable", basic_boxes=0, days_until_stockout=5),  # basic 0 → 제외
+    ]
+    r = optimize_to_pallet(items, {"P1": 10000}, **DEFAULT_KW)
+    assert r.mode == "up"
+    assert r.optimized_boxes["Z"] == 0  # basic=0 유지
+    assert r.optimized_boxes["A"] == 20
 
 
 def test_total_zero_noop():

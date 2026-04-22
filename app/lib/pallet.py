@@ -180,16 +180,22 @@ def _apply_up(
     cap_per_sku: 한 SKU 에 추가 가능한 최대 박스수(None=무제한).
     overstock_days: 추가 후 커버일수 상한(None=제약 없음).
     """
-    # 후보: flexible, 판매속도 > 0, 그리고 basic 단계에서 이미 발주 대상(basic_boxes > 0)
+    # 후보: basic 단계에서 이미 발주 대상(basic_boxes > 0) + 판매속도 > 0.
     # → 원래 안 들어갈 SKU 를 팔레트 채우기 용도로 새로 끼워넣지 않음.
+    # PROTECTED(긴급/보충) 도 '감소'는 금지되지만 '추가(+박스)' 는 허용 —
+    # 팔레트를 무조건 꽉 채우려면 후보 폭을 넓혀야 해서, basic 수량을 줄이지 않는 한 안전.
     candidates = [
         it for it in items
-        if it.urgency not in PROTECTED_URGENCIES
-        and it.velocity > 0
-        and it.basic_boxes > 0
+        if it.velocity > 0 and it.basic_boxes > 0
     ]
-    # 우선순위: days_until_stockout 오름차순 (빨리 소진될 것부터)
-    candidates.sort(key=lambda x: (x.days_until_stockout is None, x.days_until_stockout or 0))
+    # 우선순위: 안정영역(flexible) 먼저 + days_until_stockout 오름차순
+    candidates.sort(
+        key=lambda x: (
+            x.urgency in PROTECTED_URGENCIES,  # False 먼저 → 보호영역은 후순위
+            x.days_until_stockout is None,
+            x.days_until_stockout or 0,
+        )
+    )
 
     added_per_sku: dict[Any, int] = {it.key: 0 for it in items}
 

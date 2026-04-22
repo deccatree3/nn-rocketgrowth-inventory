@@ -731,39 +731,6 @@ if _is_new:
 
     allocated_df = _allocate(base_df)
 
-    # --- 6-diag. 팔레트 최적화 파이프라인 진단 --------------------------------
-    with st.expander("🧪 진단: 팔레트 최적화 수치 흐름", expanded=False):
-        _diag_basic_boxes = int(base_df["basic_boxes"].fillna(0).sum())
-        _diag_pallet_boxes = int(base_df["pallet_boxes"].fillna(0).sum())
-        _diag_final_qty = int(pd.to_numeric(base_df["inbound_final"], errors="coerce").fillna(0).sum())
-        _diag_alloc_final_qty = int(pd.to_numeric(allocated_df["inbound_final"], errors="coerce").fillna(0).sum())
-        # box 단위로 환산
-        def _sum_boxes(df: pd.DataFrame) -> int:
-            s = 0
-            for _, r in df.iterrows():
-                q_raw = r.get("inbound_final")
-                q = int(q_raw) if q_raw is not None and not (isinstance(q_raw, float) and pd.isna(q_raw)) else 0
-                b = int(r.get("box_qty") or 1)
-                s += q // max(b, 1)
-            return s
-        _diag_base_boxes = _sum_boxes(base_df)
-        _diag_alloc_boxes = _sum_boxes(allocated_df)
-        st.write({
-            "pallet_on": pallet_on,
-            "pallet_size": cfg.pallet_size_boxes,
-            "pallet_result.total_before": pallet_result.total_boxes_before if pallet_result else None,
-            "pallet_result.total_after": pallet_result.total_boxes_after if pallet_result else None,
-            "pallet_result.applied": pallet_result.applied_delta if pallet_result else None,
-            "pallet_result.unfilled": pallet_result.unfilled if pallet_result else None,
-            "base_df basic_boxes sum": _diag_basic_boxes,
-            "base_df pallet_boxes sum": _diag_pallet_boxes,
-            "base_df inbound_final qty sum": _diag_final_qty,
-            "base_df inbound_final box sum": _diag_base_boxes,
-            "allocated_df inbound_final qty sum": _diag_alloc_final_qty,
-            "allocated_df inbound_final box sum": _diag_alloc_boxes,
-            "session_key entries": len(st.session_state.get(_session_key, {})),
-        })
-
     # --- 6a. WMS 매칭 진단 (현재고 0 원인 확인용) -----------------------------
     _wms_keys_norm = {str(k).strip().upper() for k in wms_agg.keys()}
     _missing_parents = []
