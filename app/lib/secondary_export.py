@@ -875,34 +875,34 @@ def _invoice_no(mgmt_no: str) -> str:
 
 
 def build_shipping_bulk_form(order_rows: list[OrderSearchRow]) -> bytes:
-    """배송일괄처리양식 — 1컬럼 (송장번호)."""
-    wb = openpyxl.Workbook()
-    ws = wb.active
-    ws.title = "Sheet1"
-    ws.cell(row=1, column=1, value="송장번호")
-    for i, r in enumerate(order_rows, start=1):
-        ws.cell(row=i + 1, column=1, value=_invoice_no(r.mgmt_no))
+    """배송일괄처리양식 — 1컬럼 (송장번호). xlsxwriter 사용 (이지어드민 호환)."""
+    import xlsxwriter  # noqa: WPS433
+
     buf = BytesIO()
-    wb.save(buf)
+    wb = xlsxwriter.Workbook(buf, {"in_memory": True})
+    ws = wb.add_worksheet("Sheet1")
+    ws.write_string(0, 0, "송장번호")
+    for i, r in enumerate(order_rows, start=1):
+        ws.write_string(i, 0, _invoice_no(r.mgmt_no))
     wb.close()
     buf.seek(0)
     return buf.getvalue()
 
 
 def build_invoice_upload_form(order_rows: list[OrderSearchRow]) -> bytes:
-    """송장업로드양식 — 택배사/송장번호/관리번호 (A, D, E)."""
-    wb = openpyxl.Workbook()
-    ws = wb.active
-    ws.title = "Sheet1"
-    ws.cell(row=1, column=1, value="택배사")
-    ws.cell(row=1, column=4, value="송장번호")
-    ws.cell(row=1, column=5, value="관리번호")
-    for i, r in enumerate(order_rows, start=1):
-        ws.cell(row=i + 1, column=1, value="CJ대한통운")
-        ws.cell(row=i + 1, column=4, value=_invoice_no(r.mgmt_no))
-        ws.cell(row=i + 1, column=5, value=r.mgmt_no)
+    """송장업로드양식 — 택배사/송장번호/관리번호 (A, D, E). xlsxwriter 사용."""
+    import xlsxwriter  # noqa: WPS433
+
     buf = BytesIO()
-    wb.save(buf)
+    wb = xlsxwriter.Workbook(buf, {"in_memory": True})
+    ws = wb.add_worksheet("Sheet1")
+    ws.write_string(0, 0, "택배사")
+    ws.write_string(0, 3, "송장번호")
+    ws.write_string(0, 4, "관리번호")
+    for i, r in enumerate(order_rows, start=1):
+        ws.write_string(i, 0, "CJ대한통운")
+        ws.write_string(i, 3, _invoice_no(r.mgmt_no))
+        ws.write_string(i, 4, r.mgmt_no)
     wb.close()
     buf.seek(0)
     return buf.getvalue()
