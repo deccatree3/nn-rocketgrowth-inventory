@@ -1463,7 +1463,7 @@ else:
     # === 2. 검수 & 물류센터 전달 파일 ===
     with st.expander("📑 2. 검수 & 물류센터 전달 파일", expanded=(_mgmt_status == "draft")):
         _pdf_up = st.file_uploader(
-            "쿠팡 입고생성 결과물 파일(PDF 3개)를 업로드 (또는 이전 업로드 자동 복원)",
+            "쿠팡 입고생성 결과물 파일(PDF 3개)를 업로드",
             type=["pdf"], accept_multiple_files=True,
             key=f"mgmt_pdf_{_selected_plan_id}",
         )
