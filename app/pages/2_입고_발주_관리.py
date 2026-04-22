@@ -339,16 +339,33 @@ if _is_new:
     )
 
     st.caption("업로드할 파일 4종 (여러 업체 파일 섞어 올려도 자동 분류):")
-    st.markdown(
-        """
-        | NO | 구분 | 취합 경로 |
-        |:--:|------|----------|
-        | 1 | WMS 재고현황 파일 | 다원WMS > 재고관리 > 창고별로케이션별재고(OWNER) > [품목-정상,불량-로케이션-로트] 탭 > 검색 > 우클릭, Export(Excel) |
-        | 2 | 쿠팡 재고현황 파일 | 쿠팡Wing > 로켓그로스 > 재고현황 > 엑셀 다운로드 |
-        | 3 | 쿠팡 입고생성 업로드 양식 파일 | 쿠팡Wing > 로켓그로스 > 입고관리 > 새로운 입고 생성 > 엑셀 다운로드 |
-        | 4 | 쿠팡 재고이동건 파일 | 이번달 '쿠팡 재고이동건' 파일 |
-        """
-    )
+
+    _UPLOAD_GUIDE_ROWS = [
+        ("WMS 재고현황 파일", FILE_TYPE_WMS,
+         "다원WMS > 재고관리 > 창고별로케이션별재고(OWNER) > [품목-정상,불량-로케이션-로트] 탭 > 검색 > 우클릭, Export(Excel)"),
+        ("쿠팡 재고현황 파일", FILE_TYPE_COUPANG,
+         "쿠팡Wing > 로켓그로스 > 재고현황 > 엑셀 다운로드"),
+        ("쿠팡 입고생성 업로드 양식 파일", FILE_TYPE_TEMPLATE,
+         "쿠팡Wing > 로켓그로스 > 입고관리 > 새로운 입고 생성 > 엑셀 다운로드"),
+        ("쿠팡 재고이동건 파일", FILE_TYPE_MOVEMENT,
+         "이번달 '쿠팡 재고이동건' 파일"),
+    ]
+    _GUIDE_COMPANIES = ["캐처스", "서현"]
+
+    def _render_upload_guide(groups: dict | None):
+        header = "| 구분 | 취합 경로 | " + " | ".join(_GUIDE_COMPANIES) + " |"
+        sep = "|------|----------|" + "".join([":--:|"] * len(_GUIDE_COMPANIES))
+        lines = [header, sep]
+        for label, ft, path in _UPLOAD_GUIDE_ROWS:
+            marks = []
+            for c in _GUIDE_COMPANIES:
+                g = groups.get(c) if groups else None
+                marks.append("✅" if g and ft in g.files else "")
+            lines.append(f"| {label} | {path} | " + " | ".join(marks) + " |")
+        return "\n".join(lines)
+
+    _guide_ph = st.empty()
+    _guide_ph.markdown(_render_upload_guide(None))
 
     uploaded_files = st.file_uploader(
         "파일 업로드",
@@ -364,6 +381,7 @@ if _is_new:
 
     # 자동 분류
     classified, company_groups = classify_uploaded_files(uploaded_files)
+    _guide_ph.markdown(_render_upload_guide(company_groups))
 
     # 분류 결과 표시
     if company_groups:
