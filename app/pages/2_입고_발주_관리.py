@@ -664,16 +664,18 @@ if _is_new:
     # --- 5. 세션 상태 & 편집 UI -----------------------------------------------
     editor_key = f"editor_{cp_snap.snapshot_date}_{wms_snap.snapshot_date}"
 
-    # 현재까지 사용자가 직접 입력한 확정입고 값을 session_state 에 보존
-    # (추천값은 자동 채움 없이 빈칸으로 시작 — 1~2주 운영 후 로직 신뢰도 평가 후 자동 채움 전환)
-    if "inbound_final_by_opt" not in st.session_state:
-        st.session_state["inbound_final_by_opt"] = {}
+    # 확정수량 편집 session 은 스냅샷 단위로 격리 (다른 스냅샷 잔재 차단)
+    _session_key = f"inbound_final_by_opt::{cp_snap.snapshot_date}::{wms_snap.snapshot_date}"
+    if _session_key not in st.session_state:
+        st.session_state[_session_key] = {}
+    # 레거시 글로벌 키 cleanup (배포 전 잔재)
+    st.session_state.pop("inbound_final_by_opt", None)
 
     # base_df 에 세션 값 주입 (사용자가 실제 입력한 값이 있을 때만)
     for i, row in base_df.iterrows():
         opt = int(row["coupang_option_id"])
-        if opt in st.session_state["inbound_final_by_opt"]:
-            base_df.at[i, "inbound_final"] = st.session_state["inbound_final_by_opt"][opt]
+        if opt in st.session_state[_session_key]:
+            base_df.at[i, "inbound_final"] = st.session_state[_session_key][opt]
 
 
     # --- 6. 부모 풀 할당 수행 --------------------------------------------------
@@ -1029,13 +1031,13 @@ if _is_new:
         raw_val = erow.get("inbound_final")
         if raw_val is None or (isinstance(raw_val, float) and pd.isna(raw_val)):
             # 사용자가 값을 지웠거나 아직 입력 안함
-            if opt in st.session_state["inbound_final_by_opt"]:
-                del st.session_state["inbound_final_by_opt"][opt]
+            if opt in st.session_state[_session_key]:
+                del st.session_state[_session_key][opt]
                 changed = True
         else:
             new_val = _ni(raw_val) or 0
-            if st.session_state["inbound_final_by_opt"].get(opt) != new_val:
-                st.session_state["inbound_final_by_opt"][opt] = new_val
+            if st.session_state[_session_key].get(opt) != new_val:
+                st.session_state[_session_key][opt] = new_val
                 changed = True
 
     if changed:
