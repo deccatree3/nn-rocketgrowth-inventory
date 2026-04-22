@@ -8,11 +8,14 @@
 """
 from __future__ import annotations
 
+import re
+import zipfile
 from dataclasses import dataclass, field
 from datetime import date, timedelta
 from io import BytesIO
 from pathlib import Path
 from typing import Any
+from xml.sax.saxutils import escape as _xml_escape
 
 import openpyxl
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
@@ -596,6 +599,106 @@ RECEIVER_PHONE = "010-1234-1234"
 RECEIVER_ADDRESS = "충남 아산시 염치읍 서원리 72-16 2층 다원로지스틱스 아산센터"
 
 
+# ---------------------------------------------------------------------------
+# openpyxl 3.x 는 문자열을 inlineStr 로 저장. 이지어드민 파서는 sharedStrings
+# 만 인식하므로 생성 xlsx 를 후처리해서 inlineStr → sharedStrings 로 변환.
+# ---------------------------------------------------------------------------
+_INLINE_STR_RE = re.compile(
+    r'<c\s+([^>]*?)t="inlineStr"([^>]*)>\s*<is>\s*<t(?:\s[^>]*)?>(.*?)</t>\s*</is>\s*</c>',
+    re.DOTALL,
+)
+
+
+def _convert_inline_to_shared_strings(xlsx_bytes: bytes) -> bytes:
+    """openpyxl 이 inlineStr 로 저장한 xlsx 를 sharedStrings 포맷으로 변환."""
+    with zipfile.ZipFile(BytesIO(xlsx_bytes)) as zin:
+        files = {name: zin.read(name) for name in zin.namelist()}
+
+    # sharedStrings 가 이미 있으면 그대로 반환 (다른 경로 xlsx 호환)
+    if "xl/sharedStrings.xml" in files and b"inlineStr" not in files.get(
+        "xl/worksheets/sheet1.xml", b""
+    ):
+        return xlsx_bytes
+
+    # 워크시트 파일별로 inlineStr 을 sharedStrings 로 치환
+    shared: dict[str, int] = {}
+
+    def _register(text: str) -> int:
+        if text not in shared:
+            shared[text] = len(shared)
+        return shared[text]
+
+    def _replace_cell(m: re.Match) -> str:
+        pre_attrs = m.group(1) or ""
+        post_attrs = m.group(2) or ""
+        raw = m.group(3) or ""
+        # <t> 내부 텍스트 unescape — 이미 XML 이스케이프된 상태
+        text = (
+            raw.replace("&lt;", "<")
+            .replace("&gt;", ">")
+            .replace("&quot;", '"')
+            .replace("&apos;", "'")
+            .replace("&amp;", "&")
+        )
+        idx = _register(text)
+        attrs = (pre_attrs + post_attrs).strip()
+        return f'<c {attrs} t="s"><v>{idx}</v></c>' if attrs else f'<c t="s"><v>{idx}</v></c>'
+
+    for name in list(files.keys()):
+        if name.startswith("xl/worksheets/") and name.endswith(".xml"):
+            text = files[name].decode("utf-8")
+            new_text = _INLINE_STR_RE.sub(_replace_cell, text)
+            files[name] = new_text.encode("utf-8")
+
+    if not shared:
+        return xlsx_bytes
+
+    # sharedStrings.xml 생성
+    items_xml = "".join(
+        f"<si><t xml:space=\"preserve\">{_xml_escape(s)}</t></si>" for s, _ in sorted(shared.items(), key=lambda x: x[1])
+    )
+    total = len(shared)  # inlineStr 셀 1개당 1번씩 참조 (정확한 count 는 복잡하므로 unique=total 사용)
+    files["xl/sharedStrings.xml"] = (
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n'
+        f'<sst xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" '
+        f'count="{total}" uniqueCount="{total}">{items_xml}</sst>'
+    ).encode("utf-8")
+
+    # [Content_Types].xml 에 sharedStrings override 추가
+    ct_name = "[Content_Types].xml"
+    ct = files[ct_name].decode("utf-8")
+    if "sharedStrings.xml" not in ct:
+        override = (
+            '<Override PartName="/xl/sharedStrings.xml" '
+            'ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sharedStrings+xml"/>'
+        )
+        ct = ct.replace("</Types>", f"{override}</Types>")
+        files[ct_name] = ct.encode("utf-8")
+
+    # workbook.xml.rels 에 sharedStrings relationship 추가
+    rels_name = "xl/_rels/workbook.xml.rels"
+    rels = files[rels_name].decode("utf-8")
+    if "sharedStrings.xml" not in rels:
+        # 기존 Relationship Id 중 최대값 찾아 +1
+        ids = re.findall(r'Id="rId(\d+)"', rels)
+        next_id = max([int(x) for x in ids], default=0) + 1
+        new_rel = (
+            f'<Relationship Id="rId{next_id}" '
+            'Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/sharedStrings" '
+            'Target="sharedStrings.xml"/>'
+        )
+        rels = rels.replace("</Relationships>", f"{new_rel}</Relationships>")
+        files[rels_name] = rels.encode("utf-8")
+
+    # 재압축
+    buf = BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zout:
+        for name, data in files.items():
+            zout.writestr(name, data)
+    buf.seek(0)
+    return buf.getvalue()
+
+
 def order_form_sequence(
     items: list[SecondaryItem],
     pallet_assignment: PalletAssignment,
@@ -658,7 +761,8 @@ def build_order_form(
     wb.save(buf)
     wb.close()
     buf.seek(0)
-    return buf.getvalue()
+    # 이지어드민 파서 호환 — inlineStr 을 sharedStrings 로 변환
+    return _convert_inline_to_shared_strings(buf.getvalue())
 
 
 # ============================================================================
