@@ -170,6 +170,32 @@ def verify(
         )
     )
 
+    # ----- 2.5 번들 제품 개수 vs 쿠팡 라벨 제품 개수 일치 -----
+    bundle_count = sum(
+        1 for s in planned_skus if s.unit_qty and s.unit_qty >= 2 and s.inbound_qty > 0
+    )
+    label_count = len(labels)
+    if bundle_count == label_count:
+        report.add(
+            CheckItem(
+                name="번들 제품 개수↔라벨 제품 개수",
+                status="ok",
+                expected=bundle_count,
+                actual=label_count,
+                detail=f"번들 {bundle_count}종 = 라벨 {label_count}종",
+            )
+        )
+    else:
+        report.add(
+            CheckItem(
+                name="번들 제품 개수↔라벨 제품 개수",
+                status="fail",
+                expected=bundle_count,
+                actual=label_count,
+                detail=f"번들 {bundle_count}종 vs 라벨 {label_count}종 불일치",
+            )
+        )
+
     # ----- 3. 라벨 vs 발주 수량 매칭 (라벨 출력 대상 SKU만) -----
     expected_labels: dict[str, PlannedSku] = {}  # 부착바코드 → sku
     missing_label_skus: list[dict[str, Any]] = []
@@ -255,6 +281,37 @@ def verify(
         )
     else:
         report.add(CheckItem(name="라벨 수량 일치", status="ok", detail=f"{len(expected_labels)}건 모두 일치"))
+
+    # ----- 5a. 라벨 소비기한 표기 여부 -----
+    missing_expiry = []
+    for bc, sku in expected_labels.items():
+        if bc not in labels:
+            continue
+        if labels[bc].expiry is None:
+            missing_expiry.append(
+                {
+                    "barcode": bc,
+                    "product_name": sku.product_name,
+                    "label_count": labels[bc].count,
+                }
+            )
+    if missing_expiry:
+        report.add(
+            CheckItem(
+                name="라벨 소비기한 표기",
+                status="fail",
+                detail=f"{len(missing_expiry)}개 라벨에 소비기한 미표기",
+                items=missing_expiry,
+            )
+        )
+    else:
+        report.add(
+            CheckItem(
+                name="라벨 소비기한 표기",
+                status="ok",
+                detail=f"{len(expected_labels)}개 라벨 모두 소비기한 표기됨",
+            )
+        )
 
     # ----- 5. 소비기한 일치 -----
     expiry_mismatches = []

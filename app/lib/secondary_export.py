@@ -192,6 +192,11 @@ def build_consolidation_list(
     # 같은 팔레트별 시작 행을 추적해서 파레트수 셀 병합용
     pallet_row_ranges: dict[int, list[int]] = {}
 
+    # 스키니퓨리티 선물세트 합포장 쇼핑백: 선물세트 바로 아래에 추가
+    GIFT_SET_BC = "8809744301273"
+    GIFT_BAG_BC = "8809744301525"
+    GIFT_BAG_NAME = "스키니퓨리티 선물세트 쇼핑백 - 스키니퓨리티 선물세트(7T*4종) 박스에 합포장"
+
     r = 9
     for pallet_no, entry, it in rows_to_write:
         boxes_here = entry.boxes
@@ -220,6 +225,23 @@ def build_consolidation_list(
 
         pallet_row_ranges.setdefault(pallet_no, []).append(r)
         r += 1
+
+        # 선물세트면 쇼핑백 합포장 행 1개 추가 (합계 / 팔레트 미반영)
+        if str(it.own_wms_barcode or "") == GIFT_SET_BC:
+            bag_row = [
+                GIFT_BAG_NAME,  # 1 상품명
+                GIFT_BAG_BC,    # 2 바코드(WMS)
+                GIFT_BAG_BC,    # 3 바코드(부착)
+                qty_here,       # 4 수량 = 선물세트 수량
+                "", "", "", "", "", "", "",
+            ]
+            for i, v in enumerate(bag_row, start=1):
+                c = ws.cell(row=r, column=i, value=v)
+                c.alignment = left_align if i == 1 else center
+                c.border = border
+                if pallet_no % 2 == 0:
+                    c.fill = even_pallet_fill
+            r += 1
 
     # 파레트수 컬럼 (10) 병합 + 값 = 1
     for pallet_no, rows in pallet_row_ranges.items():

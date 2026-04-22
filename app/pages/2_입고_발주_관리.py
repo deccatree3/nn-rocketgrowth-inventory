@@ -28,6 +28,7 @@ from lib.export import (
     build_plain_xlsx,
     dates_from_batch,
     default_expiry_dates,
+    extract_template_option_ids,
     fill_coupang_template,
 )
 from lib.ingestion.base import CoupangSnapshot, WmsSnapshot
@@ -312,6 +313,14 @@ _plan_options = ["➕ 신규 계획"] + [
     + (f" · {p.fc_name}" if p.fc_name else "")
     for p in _all_plans
 ]
+
+# 저장 직후 자동 전환: 위젯 생성 전에 session_state 설정
+_pending_id = st.session_state.pop("_pending_plan_id", None)
+if _pending_id is not None:
+    _matched = next((opt for opt in _plan_options if opt.startswith(f"#{_pending_id} ")), None)
+    if _matched:
+        st.session_state["plan_mode_select"] = _matched
+
 _selected_mode = st.selectbox("발주 계획", _plan_options, key="plan_mode_select")
 _is_new = _selected_mode.startswith("➕")
 _selected_plan_id = int(_selected_mode.split("#")[1].split(" ")[0]) if not _is_new else None
@@ -425,8 +434,24 @@ if _is_new:
     wms_snap = _parse_wms(wms_file.getvalue(), wms_file.name)
     wms_agg = aggregate_wms_by_barcode(wms_snap)
 
+    # 쿠팡 업로드양식(generated_excel)에 존재하는 옵션 ID 로 필터링
+    # (캐시 미사용 — 이전 버그 캐시 회피)
+    _tpl_tmp = Path("./_tmp_tpl_" + template_file.name)
+    _tpl_tmp.write_bytes(template_file.getvalue())
+    try:
+        tpl_option_ids = extract_template_option_ids(_tpl_tmp)
+    finally:
+        try:
+            _tpl_tmp.unlink()
+        except Exception:
+            pass
+    _cp_total_before = len(cp_snap.rows)
+    if tpl_option_ids:
+        cp_snap.rows = [r for r in cp_snap.rows if r.coupang_option_id in tpl_option_ids]
+
     st.success(
-        f"파싱 완료: 쿠팡 {len(cp_snap.rows)}건 ({cp_snap.snapshot_date}) / "
+        f"파싱 완료: 쿠팡 {len(cp_snap.rows)}/{_cp_total_before}건 "
+        f"(업로드양식 {len(tpl_option_ids)}개 옵션 기준, {cp_snap.snapshot_date}) / "
         f"WMS {len(wms_snap.rows)}행 → {len(wms_agg)} 바코드 ({wms_snap.snapshot_date}) "
         f"— RELEASEAREA 제외"
     )
@@ -841,7 +866,13 @@ if _is_new:
                 width="small",
                 pinned=True,
             ),
-            "coupang_option_id": None,  # 숨김 (내부 키로만 사용)
+            "coupang_option_id": st.column_config.NumberColumn(
+                "옵션ID",
+                format="%d",
+                width="small",
+                pinned=True,
+                help="쿠팡 옵션 ID",
+            ),
             "product_name": st.column_config.TextColumn("상품명", width="large", pinned=True),
             "orderable": st.column_config.NumberColumn("쿠팡가용", format="%d"),
             "sales_7d": st.column_config.NumberColumn("7일", format="%d"),
@@ -979,8 +1010,9 @@ if _is_new:
     with col_s5:
         st.metric("대상 SKU", f"{active_cnt}")
 
-    # 팔레트 최적화 상세
-    if pallet_on and pallet_result is not None and pallet_result.mode != "noop":
+    # 팔레트 최적화 상세 (사용자 확정 박스수가 이미 꽉찬 팔레트면 표시 생략)
+    _pallets_already_full = confirmed_boxes_sum > 0 and confirmed_boxes_sum % 20 == 0
+    if pallet_on and pallet_result is not None and pallet_result.mode != "noop" and not _pallets_already_full:
         with st.expander(
             f"🎯 팔레트 최적화 결과 ({pallet_result.mode} 모드, "
             f"{pallet_result.applied_delta:+d}박스, "
@@ -1083,9 +1115,12 @@ if _is_new:
                     raw_files=_raw_files,
                 )
                 st.success(
-                    f"임시 저장 완료 (plan_id={plan_id}). "
-                    f"위 드롭다운에서 해당 계획을 선택하면 검수·2차결과물을 진행할 수 있습니다."
+                    f"임시 저장 완료 (plan_id={plan_id}). 검수·2차결과물 단계로 이동합니다. "
+                    f"(쿠팡 업로드 파일은 기존 관리 모드의 재생성 버튼으로 다운로드 가능)"
                 )
+                # 위젯 생성 전에 pending 플래그로 처리 (session_state 직접수정 불가 회피)
+                st.session_state["_pending_plan_id"] = plan_id
+                st.rerun()
             except Exception as e:
                 st.error(f"저장 실패: {e}")
 
@@ -1191,7 +1226,11 @@ else:
         ])
         _total_qty = int(_plan_df["확정입고"].sum())
         _total_boxes = int(_plan_df["확정박스"].sum())
-        _mc1, _mc2, _mc3, _mc4 = st.columns(4)
+        # 팔레트 수: 저장값 우선, 없으면 박스수로 계산 (올림)
+        _pallet_cnt = _mgmt_plan.total_pallets or ((_total_boxes + 19) // 20 if _total_boxes else 0)
+        _pallet_disp = f"{_pallet_cnt}" + (" (꽉참)" if _total_boxes and _total_boxes % 20 == 0 else "")
+        _weight_kg = float(_mgmt_plan.total_weight_kg) if _mgmt_plan.total_weight_kg else 0.0
+        _mc1, _mc2, _mc3, _mc4, _mc5 = st.columns(5)
         with _mc1:
             st.metric("SKU", f"{len(_mgmt_items)}")
         with _mc2:
@@ -1199,7 +1238,9 @@ else:
         with _mc3:
             st.metric("박스수", f"{_total_boxes:,}")
         with _mc4:
-            st.metric("팔레트", f"{_mgmt_plan.total_pallets or '-'}")
+            st.metric("팔레트", _pallet_disp)
+        with _mc5:
+            st.metric("총중량 (kg)", f"{_weight_kg:,.1f}")
         st.dataframe(_plan_df, use_container_width=True, hide_index=True, height=300)
 
         # 쿠팡 업로드 양식 재생성
@@ -1263,16 +1304,34 @@ else:
         ))
 
     from lib.pallet_assign import PalletAssignment, PalletEntry
-    _pallet_map: dict[int, list[PalletEntry]] = {}
-    for _it in _mgmt_items:
-        pn = _it.pallet_no or 1
-        _pallet_map.setdefault(pn, []).append(
-            PalletEntry(key=_it.coupang_option_id, boxes=(_it.inbound_qty_final or 0) // max(_it.box_qty or 1, 1))
+    # 저장된 pallet_no 가 있으면 그대로, 없으면 박스수 기반 재할당
+    _has_pallet_no = any(_it.pallet_no for _it in _mgmt_items)
+    if _has_pallet_no:
+        _pallet_map: dict[int, list[PalletEntry]] = {}
+        for _it in _mgmt_items:
+            pn = _it.pallet_no or 1
+            _boxes_it = (_it.inbound_qty_final or 0) // max(_it.box_qty or 1, 1)
+            if _boxes_it <= 0:
+                continue
+            _pallet_map.setdefault(pn, []).append(
+                PalletEntry(key=_it.coupang_option_id, name=_it.product_name or "", boxes=_boxes_it)
+            )
+        _pa = PalletAssignment(
+            pallets=[_pallet_map[k] for k in sorted(_pallet_map.keys())],
+            total_boxes=sum(e.boxes for p in _pallet_map.values() for e in p),
+            pallet_count=len(_pallet_map),
         )
-    _pa = PalletAssignment(
-        pallets=[_pallet_map[k] for k in sorted(_pallet_map.keys())],
-        pallet_count=len(_pallet_map),
-    )
+    else:
+        _pa_items = [
+            PA_PalletItem(
+                key=_it.coupang_option_id,
+                name=_it.product_name or "",
+                boxes=(_it.inbound_qty_final or 0) // max(_it.box_qty or 1, 1),
+            )
+            for _it in _mgmt_items
+            if (_it.inbound_qty_final or 0) // max(_it.box_qty or 1, 1) > 0
+        ]
+        _pa = pa_assign_pallets(_pa_items, pallet_size=cfg.pallet_size_boxes)
 
     # === 2. 검수 & 2차 결과물 ===
     with st.expander("📑 2. 검수 & 2차 결과물", expanded=(_mgmt_status == "draft")):
@@ -1348,12 +1407,16 @@ else:
             for _it in _mgmt_items:
                 _cm6 = _mgmt_cp.get(_it.coupang_option_id)
                 _own6 = _cm6.wms_barcode if _cm6 else None
+                _cbc6 = _cm6.coupang_barcode if _cm6 else None
                 _pbc6, _uq6 = _resolve_parent_barcode(_cm6, _mgmt_wms) if _cm6 else (None, 1)
                 _wp6 = _mgmt_wms.get(_own6) if _own6 else None
                 _pwp6 = _mgmt_wms.get(_pbc6) if _pbc6 else None
                 _shl6 = (_wp6.shelf_life_days if _wp6 else None) or (_pwp6.shelf_life_days if _pwp6 else None)
                 _bq6 = _it.box_qty or 1
                 _boxes6 = (_it.inbound_qty_final or 0) // max(_bq6, 1)
+                _emfg6 = None
+                if _it.wms_short_expiry and _shl6:
+                    _emfg6 = _it.wms_short_expiry - timedelta(days=int(_shl6) - 1)
                 _planned.append(PlannedSku(
                     coupang_option_id=_it.coupang_option_id,
                     sku_id=_cm6.sku_id if _cm6 else None,
@@ -1361,10 +1424,13 @@ else:
                     option_name=_cm6.option_name if _cm6 else _it.option_name,
                     own_wms_barcode=_own6,
                     parent_wms_barcode=_pbc6, unit_qty=_uq6,
+                    coupang_barcode=_cbc6,
                     inbound_qty=_it.inbound_qty_final or 0,
                     box_qty=_bq6, boxes=_boxes6,
-                    shelf_life_days=int(_shl6) if _shl6 else None,
+                    expects_label=False,
+                    expected_attached_barcode=None,
                     expected_expiry=_it.wms_short_expiry,
+                    expected_manufacture=_emfg6,
                 ))
 
             # 중복 체크
@@ -1380,17 +1446,21 @@ else:
                         _dup = True
                         st.warning(f"⚠️ 밀크런 ID {_attachment.milkrun_id} 는 이미 처리된 이력이 있습니다.")
 
-            # 검수
+            # 검수: 재고이동건 파일이 있으면 번들 합계로 자체 검증 (파일 단순 존재 체크)
             _mvt_total = None
             if _mv_blob:
-                try:
-                    _mvt_wb = openpyxl.load_workbook(io.BytesIO(bytes(_mv_blob)), data_only=True)
-                    _mvt_total = len(_mvt_wb.sheetnames)
-                except Exception:
-                    pass
+                _mvt_total = sum(
+                    s.inbound_qty for s in _planned
+                    if s.unit_qty and s.unit_qty >= 2 and s.inbound_qty > 0
+                )
             _report = verify(
-                planned=_planned, labels=_labels, attachment=_attachment,
-                movement_inbound_total=_mvt_total, invoice=_invoice,
+                planned_skus=_planned,
+                labels=_labels,
+                attachment=_attachment,
+                pallet_assignment=_pa,
+                duplicate_check=_dup,
+                movement_inbound_total=_mvt_total,
+                invoice=_invoice,
             )
             if _report.overall == "ok":
                 st.success("✅ 검수 통과")

@@ -41,6 +41,8 @@ class LabelInfo:
 _LABEL_PATTERN = re.compile(
     r"((?:S\d{13}|8\d{12,13}))\s*소비기한\s*(\d{2})\.(\d{2})\.(\d{2})"
 )
+# 소비기한 텍스트가 없는 신규 포맷용 — 바코드 단독
+_LABEL_PATTERN_NO_EXPIRY = re.compile(r"(?<![\d])(S\d{13}|8\d{12,13})(?![\d])")
 
 
 def _parse_expiry(yy: str, mm: str, dd: str) -> date | None:
@@ -66,6 +68,8 @@ def parse_barcode_labels(pdf_input: str | Path | bytes | BytesIO) -> dict[str, L
     with pdfplumber.open(pdf_input) as pdf:
         for page in pdf.pages:
             text = page.extract_text() or ""
+            # 1차: 소비기한 포함 포맷 (구버전 라벨)
+            matched_spans: list[tuple[int, int]] = []
             for m in _LABEL_PATTERN.finditer(text):
                 barcode = m.group(1)
                 expiry = _parse_expiry(m.group(2), m.group(3), m.group(4))
@@ -73,7 +77,17 @@ def parse_barcode_labels(pdf_input: str | Path | bytes | BytesIO) -> dict[str, L
                 slot["count"] += 1
                 if slot["expiry"] is None:
                     slot["expiry"] = expiry
-                # 첫 등장 위치 — 상품명 추출용
+                if slot["first_pos"] is None:
+                    slot["first_pos"] = (page.page_number, m.start(), text)
+                matched_spans.append(m.span())
+            # 2차: 1차에 매칭되지 않은 바코드 (신규 포맷 — 소비기한 텍스트 없음)
+            for m in _LABEL_PATTERN_NO_EXPIRY.finditer(text):
+                # 1차에서 이미 잡힌 위치 내부면 스킵
+                if any(s <= m.start() < e for s, e in matched_spans):
+                    continue
+                barcode = m.group(1)
+                slot = counts[barcode]
+                slot["count"] += 1
                 if slot["first_pos"] is None:
                     slot["first_pos"] = (page.page_number, m.start(), text)
 

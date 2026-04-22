@@ -15,6 +15,7 @@ dependencies = [
     "python-dateutil>=2.9",
     "pydantic>=2.9",
     "requests>=2.32",           # 중기: 쿠팡 API / Slack Webhook
+    "pdfplumber>=0.11",         # 쿠팡 라벨/부착문서 PDF 파싱
 ]
 
 [project.optional-dependencies]

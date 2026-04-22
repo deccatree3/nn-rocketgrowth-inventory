@@ -1,0 +1,31 @@
+# 고객 데이터 / 밀크런 회차별 raw 폴더 (공개 배포 절대 금지)
+# 루트 레벨만 차단 — app/ 하위의 샘플/테스트 fixture 는 영향 없음
+/20*/
+/raw/
+/밀크런_서류-*/
+
+# 루트 레벨에 떨어진 엑셀/PDF/스크린샷 — 작업 흔적, 커밋 금지
+/*.xlsx
+/*.xls
+/*.pdf
+/*.png
+/*.jpg
+/*.jpeg
+/*.gif
+
+# 기타
+/desktop.ini
+/.DS_Store
+/Thumbs.db
+/restructure_page.py
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# IDE
+.vscode/
+.idea/
+.claude/

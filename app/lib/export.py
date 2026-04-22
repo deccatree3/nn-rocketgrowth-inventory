@@ -65,6 +65,28 @@ class ExportItem:
     option_name: str | None = None
 
 
+def extract_template_option_ids(template_path: str | Path) -> set[int]:
+    """쿠팡 업로드 양식(generated_excel)에서 옵션 ID 집합을 추출한다.
+
+    헤더는 1~4행, 5행부터 data row. G열(옵션 ID) 기준.
+    """
+    wb = load_workbook(template_path, data_only=True)
+    try:
+        ws = wb[SHEET_NAME] if SHEET_NAME in wb.sheetnames else wb.active
+        ids: set[int] = set()
+        for r in range(5, ws.max_row + 1):
+            v = ws.cell(row=r, column=COL_OPTION_ID).value
+            if v in (None, ""):
+                continue
+            try:
+                ids.add(int(str(v).strip()))
+            except (ValueError, TypeError):
+                continue
+        return ids
+    finally:
+        wb.close()
+
+
 def fill_coupang_template(
     template_path: str | Path,
     items: list[ExportItem],
