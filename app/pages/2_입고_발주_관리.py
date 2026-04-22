@@ -1670,8 +1670,8 @@ else:
                     file_name=f"밀크런_물류부착문서1 (팔레트부착문서)_{_fc}_{_datesuf}.pdf", mime="application/pdf",
                     use_container_width=True, type="primary")
 
-            # 이지어드민 재고차감
-            st.markdown("#### 이지어드민 재고차감")
+            # 이지어드민 재고차감 파일
+            st.markdown("#### 이지어드민 재고차감 파일")
             _ea = st.columns(3)
             try:
                 _ord = build_order_form(_sec_items, _fc, str(_order_base).strip(), pallet_assignment=_pa)
