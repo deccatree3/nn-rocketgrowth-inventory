@@ -777,6 +777,9 @@ if _is_new:
                     "pool_total",
                     "allocated_base",
                     "pool_remaining",
+                    "pool_velocity",
+                    "reproduction_demand",
+                    "shortfall",
                 ]
             ].rename(
                 columns={
@@ -785,6 +788,9 @@ if _is_new:
                     "pool_total": "현재고",
                     "allocated_base": "이번출고",
                     "pool_remaining": "출고후잔여",
+                    "pool_velocity": "일소요",
+                    "reproduction_demand": f"{reproduction_lead}일소요",
+                    "shortfall": f"{reproduction_lead}일후부족",
                 }
             )
             st.dataframe(display, use_container_width=True, hide_index=True)
