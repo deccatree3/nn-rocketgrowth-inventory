@@ -589,16 +589,11 @@ def update_inventory_movement(
 # ============================================================================
 # 4) 로켓그로스(서현커머스) 발주서양식
 # ============================================================================
-FC_RECEIVER_INFO: dict[str, dict[str, str]] = {
-    "동탄1": {
-        "name_fmt": "[밀크런]로켓그로스_{fc}",
-        "phone": "010-1234-1234",
-        "address": "충남 아산시 염치읍 서원리 72-16 2층 다원로지스틱스 아산센터",
-    },
-    "화성2": {"name_fmt": "[밀크런]로켓그로스_{fc}", "phone": "010-1234-1234", "address": ""},
-    "천안2": {"name_fmt": "[밀크런]로켓그로스_{fc}", "phone": "010-1234-1234", "address": ""},
-    "옥천3": {"name_fmt": "[밀크런]로켓그로스_{fc}", "phone": "010-1234-1234", "address": ""},
-}
+# 발주서양식은 이지어드민 재고차감용 가상 발주 — 실제 배송 안 함. 배송지 정보는
+# FC 와 무관하게 고정값 사용 (수령인 이름 템플릿만 FC 별로 다름).
+RECEIVER_NAME_FMT = "[밀크런]로켓그로스_{fc}"
+RECEIVER_PHONE = "010-1234-1234"
+RECEIVER_ADDRESS = "충남 아산시 염치읍 서원리 72-16 2층 다원로지스틱스 아산센터"
 
 
 def order_form_sequence(
@@ -636,12 +631,9 @@ def build_order_form(
     ws = wb.active
     ws.title = "Sheet1"
 
-    fc_info = FC_RECEIVER_INFO.get(fc_name, {
-        "name_fmt": "[밀크런]로켓그로스_{fc}", "phone": "", "address": "",
-    })
-    receiver = fc_info["name_fmt"].format(fc=fc_name)
-    phone = fc_info.get("phone", "")
-    address = fc_info.get("address", "")
+    receiver = RECEIVER_NAME_FMT.format(fc=fc_name)
+    phone = RECEIVER_PHONE
+    address = RECEIVER_ADDRESS
 
     headers = ["순서", "주문번호", "상품명", "수량", "수령인", "연락처", "주소", "비고"]
     for i, h in enumerate(headers, start=1):
