@@ -681,13 +681,16 @@ if _is_new:
         df["pool_remaining_base"] = None
         df["max_single_batch_after"] = None
 
+        # WMS agg 을 대소문자·공백 정규화된 키로 보조 인덱스화 (fallback lookup)
+        _wms_agg_norm = {str(k).strip().upper(): v for k, v in wms_agg.items()}
+
         for parent_bc, group in df.groupby("parent_wms_barcode", sort=False, dropna=False):
             if not parent_bc:
                 # 부모 정보 없음 → 상태만 마킹
                 for idx in group.index:
                     df.at[idx, "selected_status"] = "no_parent"
                 continue
-            agg = wms_agg.get(parent_bc)
+            agg = wms_agg.get(parent_bc) or _wms_agg_norm.get(str(parent_bc).strip().upper())
             batches = (agg or {}).get("batches") or []
             total_base = sum(b.get("available") or 0 for b in batches)
 
@@ -712,6 +715,30 @@ if _is_new:
 
 
     allocated_df = _allocate(base_df)
+
+    # --- 6a. WMS 매칭 진단 (현재고 0 원인 확인용) -----------------------------
+    _wms_keys_norm = {str(k).strip().upper() for k in wms_agg.keys()}
+    _missing_parents = []
+    for _bc in base_df["parent_wms_barcode"].dropna().unique():
+        if str(_bc).strip().upper() not in _wms_keys_norm:
+            _rows = base_df[base_df["parent_wms_barcode"] == _bc]
+            _names = _rows["product_name"].dropna().unique().tolist()
+            _missing_parents.append({
+                "parent_wms_barcode": _bc,
+                "상품명": ", ".join(_names[:2]),
+                "SKU수": len(_rows),
+            })
+    if _missing_parents:
+        with st.expander(
+            f"⚠️ WMS 파일에서 못 찾은 parent 바코드 ({len(_missing_parents)}건) — 해당 제품은 현재고 0 으로 표시됨",
+            expanded=False,
+        ):
+            st.caption(
+                "원인 후보: (1) WMS 파일에 해당 바코드 재고 없음 "
+                "(2) 제품 마스터의 parent_wms_barcode 가 실제 WMS 바코드와 다름 "
+                "(3) 모든 재고가 RELEASEAREA(출고대기) LOC 에 있음."
+            )
+            st.dataframe(pd.DataFrame(_missing_parents), use_container_width=True, hide_index=True)
 
     # 확정박스수 = 확정입고 / 박스낱수 (자동 계산, None 이면 None)
     def _calc_confirmed_boxes(r):
