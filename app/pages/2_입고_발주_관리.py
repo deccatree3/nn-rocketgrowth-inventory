@@ -354,7 +354,7 @@ if _is_new:
 
     def _render_upload_guide(groups: dict | None):
         comp_header = "".join(
-            f'<th style="width:60px; text-align:center;">{c}</th>' for c in _GUIDE_COMPANIES
+            f'<th style="width:90px; text-align:center; white-space:nowrap;">{c}</th>' for c in _GUIDE_COMPANIES
         )
         body = ""
         for label, ft, path in _UPLOAD_GUIDE_ROWS:
@@ -362,7 +362,7 @@ if _is_new:
             for c in _GUIDE_COMPANIES:
                 g = groups.get(c) if groups else None
                 mark = "✅" if g and ft in g.files else ""
-                marks += f'<td style="width:60px; text-align:center;">{mark}</td>'
+                marks += f'<td style="width:90px; text-align:center; white-space:nowrap;">{mark}</td>'
             body += f"<tr><td>{label}</td><td>{path}</td>{marks}</tr>"
         return (
             '<table style="border-collapse: collapse; width: 100%;">'
