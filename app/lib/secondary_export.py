@@ -305,7 +305,7 @@ def build_pallet_loading_list(
     arrival_date: date,
     milkrun_request_id: str | None = None,
     company_full: str = "㈜서현커머스",
-    pallet_size: int = 20,
+    pallet_size: int = 19,
 ) -> bytes:
     """팔레트적재리스트 엑셀 — 레퍼런스 서식 100% 재현.
 

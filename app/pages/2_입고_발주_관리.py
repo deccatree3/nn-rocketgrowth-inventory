@@ -605,9 +605,13 @@ if _is_new:
 
     # --- 4-2. 팔레트 최적화 (토글) ----------------------------------------------
     pallet_on = st.checkbox(
-        "🚛 팔레트 단위 최적화 (1팔레트 = 20박스)",
+        f"🚛 팔레트 단위 최적화 (1팔레트 = {cfg.pallet_size_boxes}박스)",
         value=True,
-        help="보호 영역(긴급/보충)은 그대로 두고, 안정 영역 SKU의 박스수를 조정해 총 박스수가 20의 배수가 되도록 맞춥니다. auto 모드: 올림폭이 팔레트 절반 이하면 올림, 초과면 내림.",
+        help=(
+            f"보호영역(긴급/보충)은 그대로 두고, 안정영역 SKU 박스수를 조정해 총 박스수가 "
+            f"{cfg.pallet_size_boxes}의 배수가 되도록 맞춥니다. 항상 올림(팔레트 꽉 채움) 기본. "
+            "한 SKU 에 최대 +2박스 까지만 추가하여 쏠림을 방지합니다."
+        ),
     )
 
     if pallet_on:
@@ -641,9 +645,10 @@ if _is_new:
         pallet_result = optimize_to_pallet(
             pallet_items,
             initial_pools,
-            pallet_size=20,
+            pallet_size=cfg.pallet_size_boxes,
             overstock_days=cfg.overstock_days,
-            rounding="auto",
+            rounding="up",
+            cap_per_sku=2,
         )
         # 결과 주입
         for i, row in base_df.iterrows():
@@ -1072,7 +1077,8 @@ if _is_new:
 
     total_weight_kg = total_weight_g / 1000
 
-    confirmed_pallets_float = confirmed_boxes_sum / 20 if confirmed_boxes_sum else 0
+    _pallet_sz = cfg.pallet_size_boxes
+    confirmed_pallets_float = confirmed_boxes_sum / _pallet_sz if confirmed_boxes_sum else 0
 
     # 기본/팔레트 추천 합계 (비교용)
     basic_boxes_sum = int(allocated_df["basic_boxes"].fillna(0).sum())
@@ -1085,8 +1091,8 @@ if _is_new:
     with col_s2:
         st.metric("확정 박스수", f"{confirmed_boxes_sum:,}")
     with col_s3:
-        pallet_full = confirmed_boxes_sum // 20
-        pallet_remainder = confirmed_boxes_sum % 20
+        pallet_full = confirmed_boxes_sum // _pallet_sz
+        pallet_remainder = confirmed_boxes_sum % _pallet_sz
         st.metric(
             "팔레트",
             f"{pallet_full}" + (f" + {pallet_remainder}박스" if pallet_remainder else " (꽉참)"),
@@ -1101,7 +1107,7 @@ if _is_new:
         st.metric("대상 SKU", f"{active_cnt}")
 
     # 팔레트 최적화 상세 (사용자 확정 박스수가 이미 꽉찬 팔레트면 표시 생략)
-    _pallets_already_full = confirmed_boxes_sum > 0 and confirmed_boxes_sum % 20 == 0
+    _pallets_already_full = confirmed_boxes_sum > 0 and confirmed_boxes_sum % _pallet_sz == 0
     if pallet_on and pallet_result is not None and pallet_result.mode != "noop" and not _pallets_already_full:
         with st.expander(
             f"🎯 팔레트 최적화 결과 ({pallet_result.mode} 모드, "
@@ -1317,8 +1323,9 @@ else:
         _total_qty = int(_plan_df["확정입고"].sum())
         _total_boxes = int(_plan_df["확정박스"].sum())
         # 팔레트 수: 저장값 우선, 없으면 박스수로 계산 (올림)
-        _pallet_cnt = _mgmt_plan.total_pallets or ((_total_boxes + 19) // 20 if _total_boxes else 0)
-        _pallet_disp = f"{_pallet_cnt}" + (" (꽉참)" if _total_boxes and _total_boxes % 20 == 0 else "")
+        _psz = cfg.pallet_size_boxes
+        _pallet_cnt = _mgmt_plan.total_pallets or ((_total_boxes + _psz - 1) // _psz if _total_boxes else 0)
+        _pallet_disp = f"{_pallet_cnt}" + (" (꽉참)" if _total_boxes and _total_boxes % _psz == 0 else "")
         _weight_kg = float(_mgmt_plan.total_weight_kg) if _mgmt_plan.total_weight_kg else 0.0
         _mc1, _mc2, _mc3, _mc4, _mc5 = st.columns(5)
         with _mc1:

@@ -74,12 +74,17 @@ def optimize_to_pallet(
     items: list[PalletItem],
     parent_pools_remaining: dict[str, int],
     *,
-    pallet_size: int = 20,
+    pallet_size: int = 19,
     overstock_days: int = 35,
-    rounding: str = "auto",  # "auto" | "up" | "down"
+    rounding: str = "up",  # "up" (기본·항상 올림) | "down" | "auto"(legacy)
     rounddown_threshold: float = 0.5,
+    cap_per_sku: int = 2,
 ) -> PalletResult:
     """items 의 basic_boxes 를 출발점으로 팔레트 단위에 맞춘 박스수를 산출.
+
+    기본 동작(rounding='up'): 총 박스수가 pallet_size 배수가 되도록 **항상 올림**.
+    쏠림 방지를 위해 SKU 당 최대 cap_per_sku 박스 까지만 추가.
+    cap 도달 또는 overstock_days 상한, 부모 풀 여유 제약으로 못 채운 경우 unfilled 에 기록.
 
     parent_pools_remaining 은 호출 시점의 잔여 낱개수 (원본은 수정하지 않음).
     """
@@ -121,16 +126,17 @@ def optimize_to_pallet(
     down_delta = residue
 
     if rounding == "auto":
-        # 올림폭이 팔레트 크기의 절반을 넘으면 차라리 내림
+        # legacy 호환 — 올림폭이 팔레트 크기의 절반을 넘으면 내림
         mode = "down" if (up_delta / pallet_size > rounddown_threshold) else "up"
-    elif rounding == "up":
-        mode = "up"
-    else:
+    elif rounding == "down":
         mode = "down"
+    else:
+        mode = "up"
 
     if mode == "up":
         applied = _apply_up(
-            items, optimized, pools, up_delta, overstock_days, adjustments
+            items, optimized, pools, up_delta, overstock_days, adjustments,
+            cap_per_sku=cap_per_sku,
         )
         unfilled = up_delta - applied
         total_after = total_before + applied
@@ -164,8 +170,13 @@ def _apply_up(
     delta: int,
     overstock_days: int,
     adjustments: list[tuple[Any, int]],
+    *,
+    cap_per_sku: int = 2,
 ) -> int:
-    """박스 +1씩 delta 번 추가. 실제 적용 박스수 반환."""
+    """박스 +1씩 delta 번 추가. 실제 적용 박스수 반환.
+
+    cap_per_sku: 한 SKU 에 추가 가능한 최대 박스수(쏠림 방지).
+    """
     # 후보: flexible, 판매속도 > 0
     candidates = [
         it for it in items
@@ -173,6 +184,8 @@ def _apply_up(
     ]
     # 우선순위: days_until_stockout 오름차순 (빨리 소진될 것부터)
     candidates.sort(key=lambda x: (x.days_until_stockout is None, x.days_until_stockout or 0))
+
+    added_per_sku: dict[Any, int] = {it.key: 0 for it in items}
 
     applied = 0
     # 각 반복마다 top 후보에 +1박스 시도. 실패(제약)하면 후보에서 제외 후 재시도.
@@ -183,9 +196,15 @@ def _apply_up(
         i = 0
         while i < len(candidates) and applied < delta:
             it = candidates[i]
+            # 쏠림 상한 체크
+            if added_per_sku[it.key] >= cap_per_sku:
+                candidates.pop(i)
+                advanced = True
+                continue
             if _can_add_box(it, optimized, pools, overstock_days):
                 # 적용
                 optimized[it.key] += 1
+                added_per_sku[it.key] += 1
                 if it.parent_barcode:
                     pools[it.parent_barcode] = pools.get(it.parent_barcode, 0) - it.box_qty * it.unit_qty
                 adjustments.append((it.key, 1))

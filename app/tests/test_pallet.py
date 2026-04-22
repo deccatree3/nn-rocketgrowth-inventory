@@ -28,8 +28,9 @@ def _mk(
     )
 
 
-# 기본 파라미터: 팔레트 20, overstock 상한 크게 (cover cap 영향 최소화)
-DEFAULT_KW = dict(pallet_size=20, overstock_days=999)
+# 기본 파라미터: 팔레트 20, overstock 상한 크게, legacy auto 라운딩, cap 사실상 무한
+# (대부분의 기존 테스트는 auto 모드 + cap 영향 없는 가정)
+DEFAULT_KW = dict(pallet_size=20, overstock_days=999, rounding="auto", cap_per_sku=999)
 
 
 def test_already_aligned_no_change():
@@ -94,7 +95,7 @@ def test_cover_days_cap_blocks_addition():
         _mk("A", urgency="stable", basic_boxes=15, box_qty=1, current=0, velocity=1.0, days_until_stockout=15),
     ]
     r = optimize_to_pallet(
-        items, {"P1": 10000}, pallet_size=20, overstock_days=20, rounding="up"
+        items, {"P1": 10000}, pallet_size=20, overstock_days=20, rounding="up", cap_per_sku=999
     )
     # 목표 20, delta 5, cover 상한 20 → 5박스 정확히 추가 가능 (총 20일=상한)
     assert r.optimized_boxes["A"] == 20
@@ -102,7 +103,7 @@ def test_cover_days_cap_blocks_addition():
 
     # 더 타이트한 케이스: 상한 18 → 3박스만 가능
     r2 = optimize_to_pallet(
-        items, {"P1": 10000}, pallet_size=20, overstock_days=18, rounding="up"
+        items, {"P1": 10000}, pallet_size=20, overstock_days=18, rounding="up", cap_per_sku=999
     )
     assert r2.optimized_boxes["A"] == 18
     assert r2.unfilled == 2
@@ -114,7 +115,9 @@ def test_parent_pool_constraint():
         _mk("A", urgency="stable", basic_boxes=18, box_qty=10, unit_qty=1, parent="P1"),
     ]
     # basic=18, up_delta=2, 풀 낱개=5 < 10 → 추가 불가
-    r = optimize_to_pallet(items, {"P1": 5}, pallet_size=20, overstock_days=999, rounding="up")
+    r = optimize_to_pallet(
+        items, {"P1": 5}, pallet_size=20, overstock_days=999, rounding="up", cap_per_sku=999
+    )
     assert r.optimized_boxes["A"] == 18
     assert r.unfilled == 2
 
@@ -126,7 +129,7 @@ def test_bundle_consumes_more_pool():
     ]
     # basic=15, up_delta=5, 각 박스 20 낱개 소모. 풀 30 → 1박스만 가능
     r = optimize_to_pallet(
-        items, {"P1": 30}, pallet_size=20, overstock_days=999, rounding="up"
+        items, {"P1": 30}, pallet_size=20, overstock_days=999, rounding="up", cap_per_sku=999
     )
     assert r.optimized_boxes["A"] == 16
     assert r.unfilled == 4
@@ -162,17 +165,63 @@ def test_round_robin_distribution():
 
 
 def test_auto_rounding_threshold_exactly_half():
-    """올림폭이 팔레트의 정확히 절반이면 up 모드 (임계치 초과 아님)."""
-    # total = 10 (basic), up_delta = 10, up_delta/pallet = 0.5 = threshold → up 유지
+    """(legacy auto) 올림폭이 팔레트의 정확히 절반이면 up 모드."""
     items = [_mk("A", urgency="stable", basic_boxes=10)]
-    r = optimize_to_pallet(items, {"P1": 10000}, pallet_size=20, overstock_days=999)
+    r = optimize_to_pallet(
+        items, {"P1": 10000}, pallet_size=20, overstock_days=999, rounding="auto", cap_per_sku=999
+    )
     assert r.mode == "up"
 
 
 def test_auto_rounding_prefers_down_when_gap_large():
-    """올림폭이 팔레트 절반을 초과하면 down 모드."""
+    """(legacy auto) 올림폭이 팔레트 절반을 초과하면 down 모드."""
     # total = 9, up_delta = 11, 11/20 = 0.55 > 0.5 → down
     items = [_mk("A", urgency="stable", basic_boxes=9)]
-    r = optimize_to_pallet(items, {"P1": 10000}, pallet_size=20, overstock_days=999)
+    r = optimize_to_pallet(
+        items, {"P1": 10000}, pallet_size=20, overstock_days=999, rounding="auto", cap_per_sku=999
+    )
     assert r.mode == "down"
     assert r.total_boxes_after == 0 or r.total_boxes_after == 9 - 9  # 9 removed → 0
+
+
+def test_default_always_up_fills_pallet():
+    """신규 기본 동작: rounding='up' 이 기본이며 항상 올림."""
+    # total=9, up_delta=11. 과거 auto 라면 down 이지만 이제 up 이어야 함.
+    items = [
+        _mk("A", urgency="stable", basic_boxes=5, days_until_stockout=30),
+        _mk("B", urgency="stable", basic_boxes=4, days_until_stockout=40),
+    ]
+    r = optimize_to_pallet(
+        items, {"P1": 10000}, pallet_size=20, overstock_days=999, cap_per_sku=999
+    )
+    assert r.mode == "up"
+    assert r.total_boxes_after == 20
+
+
+def test_cap_per_sku_prevents_concentration():
+    """cap_per_sku=2 로 한 SKU 에 2박스 초과 추가 금지."""
+    # 후보 2개인데 +4 필요. cap=2 면 각 +2 까지만.
+    items = [
+        _mk("A", urgency="stable", basic_boxes=8, days_until_stockout=10),  # 가장 급함
+        _mk("B", urgency="stable", basic_boxes=7, days_until_stockout=50),
+    ]
+    r = optimize_to_pallet(
+        items, {"P1": 10000}, pallet_size=19, overstock_days=999, cap_per_sku=2
+    )
+    # basic 15 → 목표 19 (+4). cap=2 → A +2, B +2
+    assert r.optimized_boxes["A"] == 10
+    assert r.optimized_boxes["B"] == 9
+    assert r.total_boxes_after == 19
+
+
+def test_cap_per_sku_unfilled_when_too_few_candidates():
+    """cap_per_sku=2 인데 후보 1개뿐이면 +2 넘어서 못 채움."""
+    items = [
+        _mk("A", urgency="stable", basic_boxes=15, days_until_stockout=10),
+    ]
+    r = optimize_to_pallet(
+        items, {"P1": 10000}, pallet_size=19, overstock_days=999, cap_per_sku=2
+    )
+    # +4 필요하지만 cap 2 로 +2 만 → unfilled 2
+    assert r.optimized_boxes["A"] == 17
+    assert r.unfilled == 2

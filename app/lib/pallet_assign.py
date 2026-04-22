@@ -55,12 +55,12 @@ class PalletAssignment:
         return result
 
 
-def assign_pallets(items: list[PalletItem], pallet_size: int = 20) -> PalletAssignment:
+def assign_pallets(items: list[PalletItem], pallet_size: int = 19) -> PalletAssignment:
     """팔레트 배분 수행.
 
     Args:
         items: 박스수 > 0 인 SKU 들
-        pallet_size: 팔레트당 최대 박스수 (기본 20)
+        pallet_size: 팔레트당 최대 박스수 (기본 19)
 
     Returns: PalletAssignment
     """

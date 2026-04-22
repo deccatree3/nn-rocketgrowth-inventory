@@ -31,7 +31,7 @@ class AppConfig:
     # 멀티 업체 (MVP: 단일 업체)
     default_company_name: str = "서현"
     default_shipment_type: str = "milkrun"  # milkrun | parcel
-    pallet_size_boxes: int = 20             # 1팔레트당 박스수
+    pallet_size_boxes: int = 19             # 1팔레트당 박스수 (안전 여유 — 20으로 하면 높이 초과 발생)
 
 
 def _build_url_from_parts(db: dict) -> str | None:
@@ -78,7 +78,7 @@ def load_config() -> AppConfig:
                 reproduction_lead_days=int(planning_section.get("reproduction_lead_days", 28)),
                 default_company_name=str(planning_section.get("default_company_name", "서현")),
                 default_shipment_type=str(planning_section.get("default_shipment_type", "milkrun")),
-                pallet_size_boxes=int(planning_section.get("pallet_size_boxes", 20)),
+                pallet_size_boxes=int(planning_section.get("pallet_size_boxes", 19)),
             )
     except Exception:
         pass
@@ -105,7 +105,7 @@ def load_config() -> AppConfig:
                 reproduction_lead_days=int(planning_section.get("reproduction_lead_days", 28)),
                 default_company_name=str(planning_section.get("default_company_name", "서현")),
                 default_shipment_type=str(planning_section.get("default_shipment_type", "milkrun")),
-                pallet_size_boxes=int(planning_section.get("pallet_size_boxes", 20)),
+                pallet_size_boxes=int(planning_section.get("pallet_size_boxes", 19)),
             )
 
     # 3) 환경변수
