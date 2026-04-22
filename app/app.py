@@ -9,17 +9,10 @@ Streamlit은 `pages/` 디렉토리 하위의 파일들을 자동으로 사이드
 """
 from __future__ import annotations
 
-import streamlit as st
-from sqlalchemy import func, select
+import sys
+import traceback
 
-from lib.db import get_session
-from lib.models import (
-    CoupangInventorySnapshot,
-    CoupangProduct,
-    InboundPlan,
-    WmsInventorySnapshot,
-    WmsProduct,
-)
+import streamlit as st
 
 st.set_page_config(
     page_title="로켓그로스 입고 관리",
@@ -31,28 +24,62 @@ st.set_page_config(
 st.title("📦 로켓그로스 입고 관리")
 st.caption("쿠팡 로켓그로스 밀크런 입고 계획 · 재고 · 이력")
 
-# --- 개요 카드 ------------------------------------------------------------
-with get_session() as session:
-    wms_count = session.execute(select(func.count()).select_from(WmsProduct)).scalar() or 0
-    cp_count = session.execute(select(func.count()).select_from(CoupangProduct)).scalar() or 0
-    managed_count = (
-        session.execute(
-            select(func.count())
-            .select_from(CoupangProduct)
-            .where(CoupangProduct.milkrun_managed.is_(True))
-        ).scalar()
-        or 0
+# --- 진단 모드: import/DB 에러를 브라우저에 직접 표시 ---------------------
+with st.expander("🛠 진단 정보 (배포 성공 시 접혀있음)", expanded=False):
+    st.write(f"Python: `{sys.version}`")
+    try:
+        import pandas as pd  # noqa: F401
+        import sqlalchemy as _sa
+        st.write(f"pandas: `{pd.__version__}` · sqlalchemy: `{_sa.__version__}`")
+    except Exception as e:
+        st.error("기본 패키지 import 실패")
+        st.exception(e)
+
+try:
+    from sqlalchemy import func, select
+
+    from lib.db import get_session
+    from lib.models import (
+        CoupangInventorySnapshot,
+        CoupangProduct,
+        InboundPlan,
+        WmsInventorySnapshot,
+        WmsProduct,
     )
-    latest_coupang = session.execute(
-        select(CoupangInventorySnapshot).order_by(CoupangInventorySnapshot.snapshot_date.desc()).limit(1)
-    ).scalar_one_or_none()
-    latest_wms = session.execute(
-        select(WmsInventorySnapshot).order_by(WmsInventorySnapshot.snapshot_date.desc()).limit(1)
-    ).scalar_one_or_none()
-    plan_count = session.execute(select(func.count()).select_from(InboundPlan)).scalar() or 0
-    latest_plan = session.execute(
-        select(InboundPlan).order_by(InboundPlan.plan_date.desc()).limit(1)
-    ).scalar_one_or_none()
+except Exception as e:
+    st.error("🔴 모듈 import 실패 — 아래 트레이스 확인")
+    st.exception(e)
+    st.code("".join(traceback.format_exc()))
+    st.stop()
+
+# --- 개요 카드 ------------------------------------------------------------
+try:
+    with get_session() as session:
+        wms_count = session.execute(select(func.count()).select_from(WmsProduct)).scalar() or 0
+        cp_count = session.execute(select(func.count()).select_from(CoupangProduct)).scalar() or 0
+        managed_count = (
+            session.execute(
+                select(func.count())
+                .select_from(CoupangProduct)
+                .where(CoupangProduct.milkrun_managed.is_(True))
+            ).scalar()
+            or 0
+        )
+        latest_coupang = session.execute(
+            select(CoupangInventorySnapshot).order_by(CoupangInventorySnapshot.snapshot_date.desc()).limit(1)
+        ).scalar_one_or_none()
+        latest_wms = session.execute(
+            select(WmsInventorySnapshot).order_by(WmsInventorySnapshot.snapshot_date.desc()).limit(1)
+        ).scalar_one_or_none()
+        plan_count = session.execute(select(func.count()).select_from(InboundPlan)).scalar() or 0
+        latest_plan = session.execute(
+            select(InboundPlan).order_by(InboundPlan.plan_date.desc()).limit(1)
+        ).scalar_one_or_none()
+except Exception as e:
+    st.error("🔴 DB 연결/쿼리 실패 — 아래 트레이스 확인 (Supabase 연결 정보나 테이블 상태 점검 필요)")
+    st.exception(e)
+    st.code("".join(traceback.format_exc()))
+    st.stop()
 
 c1, c2, c3, c4 = st.columns(4)
 with c1:
