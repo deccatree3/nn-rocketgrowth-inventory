@@ -766,10 +766,6 @@ if _is_new:
         + (f" · 재생산 리드타임 {reproduction_lead}일 기준 산계" if len(repro_list) > 0 else ""),
         expanded=len(repro_list) > 0,
     ):
-        st.caption(
-            f"조건: 밀크런 출고 후 잔여 WMS 낱개재고가 '하루 판매속도 × {reproduction_lead}일'에 못 미치는 단품. "
-            "쿠팡 외 채널 판매는 미포함 — 운영 트리거 용도."
-        )
         if len(repro_list) == 0:
             st.caption("✅ 단품 재고가 재생산 리드타임 동안 자력 운영 가능")
         else:
