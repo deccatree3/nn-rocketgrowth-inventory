@@ -1115,28 +1115,6 @@ if _is_new:
     basic_boxes_sum = int(allocated_df["basic_boxes"].fillna(0).sum())
     pallet_boxes_sum = int(allocated_df["pallet_boxes"].fillna(0).sum())
 
-    st.markdown("### 📊 요약")
-    col_s1, col_s2, col_s3, col_s4, col_s5 = st.columns(5)
-    with col_s1:
-        st.metric("확정 수량 (낱개)", f"{confirmed_qty:,}")
-    with col_s2:
-        st.metric("확정 박스수", f"{confirmed_boxes_sum:,}")
-    with col_s3:
-        pallet_full = confirmed_boxes_sum // _pallet_sz
-        pallet_remainder = confirmed_boxes_sum % _pallet_sz
-        st.metric(
-            "팔레트",
-            f"{pallet_full}" + (f" + {pallet_remainder}박스" if pallet_remainder else " (꽉참)"),
-        )
-    with col_s4:
-        st.metric(
-            "총중량 (kg)",
-            f"{total_weight_kg:,.1f}",
-            help="(WMS 단위중량 × 확정수량 + 500g × 박스수) ÷ 1000",
-        )
-    with col_s5:
-        st.metric("대상 SKU", f"{active_cnt}")
-
     # 팔레트 최적화 상세 (사용자 확정 박스수가 이미 꽉찬 팔레트면 표시 생략)
     _pallets_already_full = confirmed_boxes_sum > 0 and confirmed_boxes_sum % _pallet_sz == 0
     if pallet_on and pallet_result is not None and pallet_result.mode != "noop" and not _pallets_already_full:
