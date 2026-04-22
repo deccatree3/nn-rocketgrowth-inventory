@@ -747,48 +747,52 @@ if _is_new:
         (pool_stats["shortfall"] > 0) | (pool_stats["allocated_base"] > pool_stats["pool_total"])
     )
 
-    repro_list = pool_stats[pool_stats["needs_reproduction"]].sort_values("shortfall", ascending=False)
+    # 번들 포함 여부 — 단품만 알림 대상
+    pool_has_bundle = (
+        allocated_df[allocated_df["parent_wms_barcode"].notna()]
+        .assign(_uq=lambda d: d["unit_qty"].fillna(1).astype(int))
+        .groupby("parent_wms_barcode", sort=False)["_uq"]
+        .apply(lambda s: (s >= 2).any())
+    )
+    pool_stats["has_bundle"] = pool_stats["parent_wms_barcode"].map(pool_has_bundle).fillna(False)
+
+    repro_list = (
+        pool_stats[pool_stats["needs_reproduction"] & ~pool_stats["has_bundle"]]
+        .sort_values("shortfall", ascending=False)
+    )
 
     with st.expander(
-        f"🏭 재발주 필요 알림 ({len(repro_list)}건)"
-        + (f" · 재생산 리드타임 {reproduction_lead}일 기준" if len(repro_list) > 0 else ""),
+        "🏭 재발주 필요 품목 Check"
+        + (f" · 재생산 리드타임 {reproduction_lead}일 기준 산계" if len(repro_list) > 0 else ""),
         expanded=len(repro_list) > 0,
     ):
         st.caption(
-            f"조건: 밀크런 출고 후 잔여 WMS 낱개재고가 '부모 풀 판매속도 × {reproduction_lead}일'에 못 미치면 재발주 필요. "
-            "정확 계산은 아님 (쿠팡 외 채널 판매는 미포함) — 운영 트리거 용도."
+            f"조건: 밀크런 출고 후 잔여 WMS 낱개재고가 '하루 판매속도 × {reproduction_lead}일'에 못 미치는 단품. "
+            "쿠팡 외 채널 판매는 미포함 — 운영 트리거 용도."
         )
         if len(repro_list) == 0:
-            st.caption("✅ 모든 부모 풀이 재생산 리드타임 동안 자력 운영 가능")
+            st.caption("✅ 단품 재고가 재생산 리드타임 동안 자력 운영 가능")
         else:
             display = repro_list[
                 [
                     "parent_wms_barcode",
                     "first_product",
-                    "item_count",
                     "pool_total",
                     "allocated_base",
                     "pool_remaining",
-                    "pool_velocity",
-                    "reproduction_demand",
-                    "shortfall",
                 ]
             ].rename(
                 columns={
-                    "parent_wms_barcode": "부모바코드",
-                    "first_product": "대표상품",
-                    "item_count": "아이템수",
-                    "pool_total": "풀전체낱개",
-                    "allocated_base": "이번할당낱개",
+                    "parent_wms_barcode": "WMS바코드",
+                    "first_product": "상품명",
+                    "pool_total": "현재고",
+                    "allocated_base": "이번출고",
                     "pool_remaining": "출고후잔여",
-                    "pool_velocity": "풀속도/일",
-                    "reproduction_demand": f"{reproduction_lead}일수요",
-                    "shortfall": "부족분",
                 }
             )
-            st.dataframe(display, use_container_width=True)
+            st.dataframe(display, use_container_width=True, hide_index=True)
             st.warning(
-                f"⚠️ {len(repro_list)}개 부모 풀이 재생산 리드타임({reproduction_lead}일) 동안 버티지 못합니다. "
+                f"⚠️ {len(repro_list)}개 단품이 재생산 리드타임({reproduction_lead}일) 동안 버티지 못합니다. "
                 "생산/발주 담당자에게 알리거나 이번 밀크런 수량을 조정하세요."
             )
 
