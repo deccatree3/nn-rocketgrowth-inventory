@@ -135,18 +135,38 @@ def identify_company_from_wms_file(file_bytes: bytes) -> str | None:
 
 
 def identify_company_from_template(file_bytes: bytes) -> str | None:
-    """쿠팡 업로드 양식에서 옵션ID 추출 → 업체 식별."""
+    """쿠팡 업로드 양식에서 옵션ID 추출 → 업체 식별.
+
+    시트는 '로켓그로스 입고' 우선, 없으면 active. 헤더 1~4행, 데이터 5행부터.
+    옵션 ID 열은 G열(7) 기본이며, 헤더에 '옵션 ID' 가 있으면 그 위치로 보정.
+    """
+    # read_only=True 가 일부 generated_excel 에서 dimensions 를 1x1 로 잘못 보고하는 버그가 있어
+    # full mode 로 읽는다 (파일 크기 작아 비용 무시할 수준).
     try:
-        wb = openpyxl.load_workbook(BytesIO(file_bytes), read_only=True, data_only=True)
-        ws = wb.active
+        wb = openpyxl.load_workbook(BytesIO(file_bytes), data_only=True)
+        ws = wb["로켓그로스 입고"] if "로켓그로스 입고" in wb.sheetnames else wb.active
+
+        # 헤더에서 '옵션 ID' 컬럼 위치 탐색 (못 찾으면 7=G 기본값)
+        opt_col = 7
+        for r in range(1, min(5, ws.max_row + 1)):
+            for c in range(1, ws.max_column + 1):
+                v = ws.cell(row=r, column=c).value
+                if v and "옵션 ID" in str(v):
+                    opt_col = c
+                    break
+            else:
+                continue
+            break
+
         option_ids = []
-        for r in range(5, min(15, ws.max_row + 1)):
-            val = ws.cell(row=r, column=7).value  # G열 = 옵션 ID
-            if val:
-                try:
-                    option_ids.append(int(val))
-                except (ValueError, TypeError):
-                    pass
+        for r in range(5, min(30, ws.max_row + 1)):
+            val = ws.cell(row=r, column=opt_col).value
+            if val in (None, ""):
+                continue
+            try:
+                option_ids.append(int(str(val).strip()))
+            except (ValueError, TypeError):
+                pass
         wb.close()
         if not option_ids:
             return None
