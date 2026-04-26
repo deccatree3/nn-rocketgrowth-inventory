@@ -884,7 +884,10 @@ if _is_new:
 
     col_f1, col_f2 = st.columns([2, 1])
     with col_f1:
-        search = st.text_input("🔍 상품명 검색")
+        search = st.text_input(
+            "🔍 상품명 / 옵션ID 검색",
+            help="여러 개를 쉼표(,) 또는 공백으로 구분해 동시에 적용. 예: '비타민, 94917143993'",
+        )
     with col_f2:
         status_options = ["🚨 긴급", "⚠️ 보충", "✅ 안정", "❄️ 과잉", "⏸ 무판매"]
         status_filter = st.multiselect(
@@ -896,7 +899,16 @@ if _is_new:
 
     view = allocated_df.copy()
     if search:
-        view = view[view["product_name"].fillna("").str.contains(search, case=False, regex=False)]
+        import re as _re
+        terms = [t.strip() for t in _re.split(r"[,\s]+", search) if t.strip()]
+        if terms:
+            name_series = view["product_name"].fillna("").astype(str)
+            opt_series = view["coupang_option_id"].fillna("").astype(str)
+            mask = pd.Series(False, index=view.index)
+            for t in terms:
+                tl = t.lower()
+                mask = mask | name_series.str.lower().str.contains(tl, regex=False) | opt_series.str.contains(t, regex=False)
+            view = view[mask]
     if status_filter:
         view = view[view["urgency"].isin(status_filter)]
 
