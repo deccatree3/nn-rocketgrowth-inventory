@@ -1061,68 +1061,6 @@ if _is_new:
         },
     )
 
-    # 📥 리스트 다운로드 (필터링된 view 를 한글 컬럼명 xlsx 로)
-    _kor_col_map = {
-        "coupang_option_id": "옵션ID",
-        "urgency": "상태",
-        "product_name": "상품명",
-        "orderable": "쿠팡가용",
-        "sales_7d": "7일판매",
-        "sales_30d": "30일판매",
-        "velocity": "속도/일",
-        "days_until_stockout": "소진예상(일)",
-        "box_qty": "box입인",
-        "inbound_basic": "입고권장(낱개)",
-        "basic_boxes": "입고권장(box)",
-        "pool_remaining_base": "재고(낱개)",
-        "pool_remaining_bundle": "재고(번들)",
-        "inbound_final": "확정(낱개)",
-        "confirmed_boxes": "확정(box)",
-        "selected_batch_expiry": "소비기한",
-    }
-    _export_cols = [c for c in display_cols if c in _kor_col_map]
-    _export_df = view[_export_cols].rename(columns=_kor_col_map).copy()
-    from io import BytesIO as _BIO
-    import xlsxwriter as _xw
-    _buf = _BIO()
-    _wb = _xw.Workbook(_buf, {"in_memory": True})
-    _ws = _wb.add_worksheet("발주수량확정")
-    _hdr_fmt = _wb.add_format({"bold": True, "bg_color": "#f0f0f0", "border": 1})
-    _date_fmt = _wb.add_format({"num_format": "yyyy-mm-dd"})
-    for c, h in enumerate(_export_df.columns):
-        _ws.write_string(0, c, str(h), _hdr_fmt)
-    for r_idx, (_, row) in enumerate(_export_df.iterrows(), start=1):
-        for c_idx, col_name in enumerate(_export_df.columns):
-            v = row[col_name]
-            if v is None or (isinstance(v, float) and pd.isna(v)):
-                continue
-            if col_name == "소비기한":
-                try:
-                    if hasattr(v, "strftime"):
-                        _ws.write_datetime(r_idx, c_idx, v, _date_fmt)
-                    else:
-                        _ws.write_string(r_idx, c_idx, str(v))
-                except Exception:
-                    _ws.write_string(r_idx, c_idx, str(v))
-            elif isinstance(v, (int,)) and not isinstance(v, bool):
-                _ws.write_number(r_idx, c_idx, v)
-            elif isinstance(v, float):
-                _ws.write_number(r_idx, c_idx, v)
-            else:
-                _ws.write_string(r_idx, c_idx, str(v))
-    _ws.set_column(0, 0, 14)  # 옵션ID
-    _ws.set_column(2, 2, 40)  # 상품명
-    _ws.freeze_panes(1, 0)
-    _wb.close()
-    _buf.seek(0)
-    st.download_button(
-        "📥 리스트 다운로드 (xlsx)",
-        data=_buf.getvalue(),
-        file_name=f"발주수량확정_{date.today().isoformat()}.xlsx",
-        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        help="현재 필터·검색이 적용된 행만 한글 컬럼명으로 다운로드됩니다.",
-    )
-
     # 편집본을 session_state 에 반영 (다음 rerun 때 allocation 재계산)
     changed = False
     for _, erow in edited.iterrows():
