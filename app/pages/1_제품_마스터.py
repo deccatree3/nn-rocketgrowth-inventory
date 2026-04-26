@@ -60,22 +60,12 @@ with st.expander("📤 파일 업로드로 일괄 관리 (추가/수정/교체)"
         "두 시트가 모두 있으면 양쪽 모두 적용, 한 시트만 있으면 해당 테이블만 적용."
     )
 
-    col_up1, col_up2 = st.columns([3, 1])
-    with col_up1:
-        master_file = st.file_uploader(
-            "마스터 파일 업로드 (.xlsx)",
-            type=["xlsx"],
-            key="master_upload",
-        )
-    with col_up2:
-        upload_mode = st.radio(
-            "적용 모드",
-            ["추가/수정", "전체 교체"],
-            index=0,
-            key="upload_mode",
-            help="**추가/수정**: 기존 데이터 유지 + 파일 내용 추가/수정. "
-            "**전체 교체**: 파일에 없는 기존 항목 삭제. 파일이 마스터의 전체 원본이 됨.",
-        )
+    master_file = st.file_uploader(
+        "마스터 파일 업로드 (.xlsx)",
+        type=["xlsx"],
+        key="master_upload",
+        help="업로드 시 **전체 교체** — 파일에 없는 기존 항목은 삭제됩니다. 파일이 마스터의 유일한 원본이 되어야 합니다.",
+    )
 
     if master_file:
         try:
@@ -91,20 +81,18 @@ with st.expander("📤 파일 업로드로 일괄 관리 (추가/수정/교체)"
                 with st.popover(f"쿠팡 {cp_count}건 미리보기"):
                     st.dataframe(pd.DataFrame(parsed["coupang"]).head(20), use_container_width=True)
 
-            replace_all = upload_mode == "전체 교체"
-            if replace_all:
-                st.warning(
-                    "⚠️ 전체 교체 모드: 파일에 없는 기존 항목은 **삭제**됩니다. "
-                    "파일이 마스터의 유일한 원본이 되어야 합니다."
-                )
+            st.warning(
+                "⚠️ 전체 교체 모드: 파일에 없는 기존 항목은 **삭제**됩니다. "
+                "파일이 마스터의 유일한 원본이 되어야 합니다."
+            )
 
-            if st.button("✅ DB에 적용", type="primary", key="apply_upload"):
+            if st.button("✅ DB에 적용 (전체 교체)", type="primary", key="apply_upload"):
                 results = []
                 if wms_count > 0:
-                    s = upsert_wms_records(parsed["wms"], replace_all=replace_all)
+                    s = upsert_wms_records(parsed["wms"], replace_all=True)
                     results.append(f"WMS: +{s['added']} 추가, {s['updated']} 수정, -{s['deleted']} 삭제")
                 if cp_count > 0:
-                    s = upsert_coupang_records(parsed["coupang"], replace_all=replace_all)
+                    s = upsert_coupang_records(parsed["coupang"], replace_all=True)
                     results.append(f"쿠팡: +{s['added']} 추가, {s['updated']} 수정, -{s['deleted']} 삭제")
                 st.success(" · ".join(results))
                 st.cache_data.clear()
