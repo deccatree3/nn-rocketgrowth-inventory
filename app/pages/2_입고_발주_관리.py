@@ -340,13 +340,17 @@ if _is_new:
 
     _UPLOAD_GUIDE_ROWS = [
         ("WMS 재고현황 파일", FILE_TYPE_WMS,
-         "다원WMS > 재고관리 > 창고별로케이션별재고(OWNER) > [품목-정상,불량-로케이션-로트] 탭 > 검색 > 우클릭, Export(Excel)"),
+         "다원WMS > 재고관리 > 창고별로케이션별재고(OWNER) > [품목-정상,불량-로케이션-로트] 탭 > 검색 > 우클릭, Export(Excel)",
+         "Document_YYYY-MM-DD.xls"),
         ("쿠팡 재고현황 파일", FILE_TYPE_COUPANG,
-         "쿠팡Wing > 로켓그로스 > 재고현황 > 엑셀 다운로드"),
+         "쿠팡Wing > 로켓그로스 > 재고현황 > 엑셀 다운로드",
+         "inventory_health_sku_info_YYYYMMDDhhmmss.xlsx"),
         ("쿠팡 입고생성 업로드 양식 파일", FILE_TYPE_TEMPLATE,
-         "쿠팡Wing > 로켓그로스 > 입고관리 > 새로운 입고 생성 > 엑셀 다운로드"),
+         "쿠팡Wing > 로켓그로스 > 입고관리 > 새로운 입고 생성 > 엑셀 다운로드",
+         "generated_excel.xlsx"),
         ("쿠팡 재고이동건 파일", FILE_TYPE_MOVEMENT,
-         "이번달 '쿠팡 재고이동건' 파일"),
+         "이번달 '쿠팡 재고이동건' 파일",
+         "쿠팡 재고이동건_YYYY_MM월.xlsx"),
     ]
     _GUIDE_COMPANIES = ["캐처스", "서현"]
     # 업체별로 해당 파일 타입이 불필요(음영 처리)한 조합
@@ -357,7 +361,7 @@ if _is_new:
             f'<th style="width:90px; text-align:center; white-space:nowrap;">{c}</th>' for c in _GUIDE_COMPANIES
         )
         body = ""
-        for label, ft, path in _UPLOAD_GUIDE_ROWS:
+        for label, ft, path, fname_example in _UPLOAD_GUIDE_ROWS:
             marks = ""
             for c in _GUIDE_COMPANIES:
                 if (c, ft) in _GUIDE_NA:
@@ -369,11 +373,16 @@ if _is_new:
                 g = groups.get(c) if groups else None
                 mark = "✅" if g and ft in g.files else ""
                 marks += f'<td style="width:90px; text-align:center; white-space:nowrap;">{mark}</td>'
-            body += f"<tr><td>{label}</td><td>{path}</td>{marks}</tr>"
+            body += (
+                f"<tr><td>{label}</td>"
+                f'<td><code style="font-size:0.85em;">{fname_example}</code></td>'
+                f"<td>{path}</td>{marks}</tr>"
+            )
         return (
             '<table style="border-collapse: collapse; width: 100%;">'
             '<thead><tr>'
             '<th style="text-align:left;">구분</th>'
+            '<th style="text-align:left;">파일명 예시</th>'
             '<th style="text-align:left;">취합 경로</th>'
             f'{comp_header}'
             '</tr></thead>'
