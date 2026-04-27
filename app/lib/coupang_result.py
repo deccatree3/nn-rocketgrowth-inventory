@@ -148,6 +148,10 @@ class AttachmentMeta:
 
 
 _FC_LINE = re.compile(r"([가-힣\d]+)\(?(\d+)?\)?\s*\[로켓그로스\]\s*팔레트\s*(\S+)")
+# FC 라인이 줄바꿈으로 깨지는 경우 대비 — '팔레트 X-N' 단독 라인 매칭
+_PALLET_LABEL_LINE = re.compile(r"^\s*팔레트\s+(\d+-\d+)\s*$")
+# FC 이름·코드만 있는 라인 (예: '경기광주3(02) [로켓그로')
+_FC_NAME_LINE = re.compile(r"^([가-힣\d]+)\((\d+)\)\s*\[로켓그로")
 _MILKRUN_LINE = re.compile(r"^(\d{6,})\s+(\d{4}-\d{2}-\d{2})")
 _BOX_BARCODE = re.compile(r"^(MRN\d+)")
 _COMPANY_LINE = re.compile(r"(주식회사\s*[가-힣\w]+|㈜\s*[가-힣\w]+)")
@@ -178,7 +182,7 @@ def parse_attachment_doc(pdf_input: str | Path | bytes | BytesIO) -> AttachmentM
 
             pallet_label = None
             for line in lines:
-                # 동탄1(17) [로켓그로스] 팔레트 4-1
+                # 동탄1(17) [로켓그로스] 팔레트 4-1 (한 줄에 모두)
                 m = _FC_LINE.search(line)
                 if m:
                     if not meta.fc_name:
@@ -186,7 +190,20 @@ def parse_attachment_doc(pdf_input: str | Path | bytes | BytesIO) -> AttachmentM
                         if m.group(2):
                             meta.fc_code = m.group(2)
                     pallet_label = m.group(3)  # "4-1"
-                    # X-N 분리
+                    parts = pallet_label.split("-")
+                    if len(parts) == 2 and parts[0].isdigit():
+                        pallet_x_values.append(int(parts[0]))
+                    continue
+                # FC 라인이 줄바꿈으로 깨진 경우 — '경기광주3(02) [로켓그로' 라인만
+                m_fc = _FC_NAME_LINE.match(line)
+                if m_fc and not meta.fc_name:
+                    meta.fc_name = m_fc.group(1)
+                    meta.fc_code = m_fc.group(2)
+                    continue
+                # '팔레트 X-N' 단독 라인 (줄바꿈 변칙 대응)
+                m_p = _PALLET_LABEL_LINE.match(line)
+                if m_p:
+                    pallet_label = m_p.group(1)
                     parts = pallet_label.split("-")
                     if len(parts) == 2 and parts[0].isdigit():
                         pallet_x_values.append(int(parts[0]))
