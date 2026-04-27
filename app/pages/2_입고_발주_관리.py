@@ -595,27 +595,6 @@ if _is_new:
         f"— RELEASEAREA 제외"
     )
 
-    # === ① 끝: '제출' 버튼으로 ②로 진행 (파일이 바뀌면 재제출 필요) ===
-    import hashlib as _hashlib
-    _files_fp = _hashlib.md5(
-        "|".join(sorted(f"{f.name}-{getattr(f, 'size', 0)}" for f in uploaded_files)).encode()
-    ).hexdigest()
-    if st.session_state.get("_step1_files_fp") != _files_fp:
-        st.session_state["_step1_submitted"] = False
-        st.session_state["_step1_files_fp"] = _files_fp
-
-    if not st.session_state.get("_step1_submitted"):
-        if st.button("제출", type="primary", use_container_width=True, key="_step1_submit_btn"):
-            st.session_state["_step1_submitted"] = True
-            st.rerun()
-        st.stop()
-
-    # ① 단계 완료 → 스테퍼를 ②로 진행 표시
-    _stepper_ph.markdown(
-        _render_stepper(current=2, completed={1}),
-        unsafe_allow_html=True,
-    )
-
     # --- 3. 제품 마스터 로드 --------------------------------------------------
     with get_session() as session:
         cp_masters = session.execute(
