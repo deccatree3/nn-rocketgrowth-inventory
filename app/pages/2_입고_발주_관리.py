@@ -281,8 +281,9 @@ _WIZARD_STEPS = [
     ("①", "", "기초자료 업로드"),
     ("②", "", "발주 수량 확정"),
     ("③", "", "쿠팡 입고생성 파일 생성"),
-    ("④", "", "검수 & 물류센터"),
-    ("⑤", "", "결과 등록"),
+    ("④", "", "쿠팡 입고생성 결과물 검수"),
+    ("⑤", "", "물류센터 전달 파일 생성"),
+    ("⑥", "", "이지어드민 재고 차감"),
 ]
 
 
@@ -346,12 +347,12 @@ def _render_context_bar(plan, has_pdfs: bool = False) -> str:
 def _management_current_step(status: str, has_pdfs: bool) -> int:
     """관리 모드 현재 단계 추정."""
     if status == "completed":
-        return 5
+        return 6
     if status == "verified":
-        return 5  # 5번 단계 진행 중
+        return 5  # 발주 확정 완료, ⑤·⑥(물류센터/이지어드민) 진행 중
     # status == "draft"
     if has_pdfs:
-        return 4
+        return 4  # 검수 진행 중
     return 3
 
 
@@ -1372,11 +1373,11 @@ else:
     _mgmt_completed: set[int] = {1, 2}
     if _mgmt_step >= 4:
         _mgmt_completed.add(3)
-    if _mgmt_step >= 5 and _mgmt_status == "completed":
+    if _mgmt_status in ("verified", "completed"):
         _mgmt_completed.add(4)
+    if _mgmt_status == "completed":
         _mgmt_completed.add(5)
-    elif _mgmt_step == 5:
-        _mgmt_completed.add(4)
+        _mgmt_completed.add(6)
     st.markdown(
         _render_stepper(current=_mgmt_step, completed=_mgmt_completed),
         unsafe_allow_html=True,
@@ -1534,8 +1535,8 @@ else:
         ]
         _pa = pa_assign_pallets(_pa_items, pallet_size=cfg.pallet_size_boxes)
 
-    # === ④ 검수 & 물류센터 전달 파일 ===
-    _step4_label = "④ 검수 & 물류센터 전달 파일"
+    # === ④ 쿠팡 입고생성 결과물 검수 ===
+    _step4_label = "④ 쿠팡 입고생성 결과물 검수"
     if _mgmt_status in ("verified", "completed"):
         _step4_label += " ✅"
     st.subheader(_step4_label)
@@ -1687,14 +1688,62 @@ else:
                 with st.expander(f"세부 {len(_ck.items)}건"):
                     st.dataframe(pd.DataFrame(_ck.items), use_container_width=True, hide_index=True)
 
-        # 물류센터 전달 파일
-        st.markdown("#### 물류센터 전달 파일")
+        # === ④ 검수 끝 (이후 ⑤·⑥에서 사용할 변수 미리 준비) ===
         _order_base = (_invoice.order_id if _invoice and _invoice.order_id else _attachment.milkrun_id) or ""
         _fc = _attachment.fc_name or _mgmt_plan.fc_name or "FC"
         _arr = _attachment.arrival_date or _mgmt_plan.arrival_date or date.today()
         _yymmdd = _arr.strftime("%y%m%d")
         _datesuf = _arr.strftime("%Y%m%d")
         _yyyymm = _arr.strftime("%Y_%m월")
+
+        # 발주 확정 — ④의 종결 액션
+        if _mgmt_status == "draft":
+            if st.button("✅ 검수 완료 — 발주 확정", type="primary", use_container_width=True, disabled=_dup, key="mgmt_confirm"):
+                try:
+                    with get_session() as _s4:
+                        _po = _s4.get(InboundPlan, _selected_plan_id)
+                        _po.status = "verified"
+                        _po.fc_name = _fc
+                        _po.arrival_date = _arr
+                        _po.milkrun_id = _attachment.milkrun_id
+                        _po.total_pallets = _pa.pallet_count
+                        _po.verified_at = datetime.now(timezone.utc)
+                        _po.confirmed_at = datetime.now(timezone.utc)
+                        _ibo = {it.coupang_option_id: it for it in _mgmt_items}
+                        for _pi2, _pal2 in enumerate(_pa.pallets, start=1):
+                            for _en in _pal2:
+                                _dbi = _ibo.get(_en.key)
+                                if _dbi:
+                                    _sk = next((s for s in _planned if s.coupang_option_id == _en.key), None)
+                                    if _sk:
+                                        _cm7 = _mgmt_cp.get(_sk.coupang_option_id)
+                                        _bc7 = (_cm7.coupang_barcode if _cm7 and _cm7.coupang_barcode and _cm7.coupang_barcode.startswith("S0") else _sk.own_wms_barcode)
+                                        _bt7 = "쿠팡바코드" if (_cm7 and _cm7.coupang_barcode and _cm7.coupang_barcode.startswith("S0")) else "88코드"
+                                        _dbi.pallet_no = _pi2
+                                        _dbi.barcode_attached = _bc7
+                                        _dbi.barcode_type = _bt7
+                        _tb = sum(s.boxes for s in _planned)
+                        _s4.add(CoupangResultLog(
+                            company_name=_mgmt_company,
+                            milkrun_id=_attachment.milkrun_id or "",
+                            fc_name=_fc, arrival_date=_arr,
+                            total_pallets=_pa.pallet_count, total_boxes=_tb,
+                            total_skus=len([s for s in _planned if s.boxes > 0]),
+                            plan_id=_selected_plan_id,
+                            label_filename=_lname, attachment_filename=_aname,
+                        ))
+                        _s4.commit()
+                    st.success(f"✅ 발주 #{_selected_plan_id} 확정 완료")
+                    st.cache_data.clear()
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"확정 실패: {e}")
+
+        # === ⑤ 물류센터 전달 파일 생성 ===
+        _step5_label = "⑤ 물류센터 전달 파일 생성"
+        if _mgmt_status in ("verified", "completed"):
+            _step5_label += " ✅"
+        st.subheader(_step5_label)
 
         _dc = st.columns(3)
         try:
@@ -1747,8 +1796,11 @@ else:
                 file_name=f"밀크런_물류부착문서1 (팔레트부착문서)_{_fc}_{_datesuf}.pdf", mime="application/pdf",
                 use_container_width=True, type="primary")
 
-        # 이지어드민 재고차감 파일
-        st.markdown("#### 이지어드민 재고차감 파일")
+        # === ⑥ 이지어드민 재고 차감 ===
+        _step6_label = "⑥ 이지어드민 재고 차감"
+        if _mgmt_status == "completed":
+            _step6_label += " ✅"
+        st.subheader(_step6_label)
         _ea = st.columns(3)
         try:
             _ord = build_order_form(_sec_items, _fc, str(_order_base).strip(), pallet_assignment=_pa)
@@ -1760,58 +1812,12 @@ else:
         except Exception as e:
             with _ea[0]:
                 st.error(str(e))
-
-        # 발주 확정
-        if _mgmt_status == "draft":
-            st.divider()
-            if st.button("✅ 검수 완료 — 발주 확정", type="primary", use_container_width=True, disabled=_dup, key="mgmt_confirm"):
-                try:
-                    with get_session() as _s4:
-                        _po = _s4.get(InboundPlan, _selected_plan_id)
-                        _po.status = "verified"
-                        _po.fc_name = _fc
-                        _po.arrival_date = _arr
-                        _po.milkrun_id = _attachment.milkrun_id
-                        _po.total_pallets = _pa.pallet_count
-                        _po.verified_at = datetime.now(timezone.utc)
-                        _po.confirmed_at = datetime.now(timezone.utc)
-                        _ibo = {it.coupang_option_id: it for it in _mgmt_items}
-                        for _pi2, _pal2 in enumerate(_pa.pallets, start=1):
-                            for _en in _pal2:
-                                _dbi = _ibo.get(_en.key)
-                                if _dbi:
-                                    _sk = next((s for s in _planned if s.coupang_option_id == _en.key), None)
-                                    if _sk:
-                                        _cm7 = _mgmt_cp.get(_sk.coupang_option_id)
-                                        _bc7 = (_cm7.coupang_barcode if _cm7 and _cm7.coupang_barcode and _cm7.coupang_barcode.startswith("S0") else _sk.own_wms_barcode)
-                                        _bt7 = "쿠팡바코드" if (_cm7 and _cm7.coupang_barcode and _cm7.coupang_barcode.startswith("S0")) else "88코드"
-                                        _dbi.pallet_no = _pi2
-                                        _dbi.barcode_attached = _bc7
-                                        _dbi.barcode_type = _bt7
-                        _tb = sum(s.boxes for s in _planned)
-                        _s4.add(CoupangResultLog(
-                            company_name=_mgmt_company,
-                            milkrun_id=_attachment.milkrun_id or "",
-                            fc_name=_fc, arrival_date=_arr,
-                            total_pallets=_pa.pallet_count, total_boxes=_tb,
-                            total_skus=len([s for s in _planned if s.boxes > 0]),
-                            plan_id=_selected_plan_id,
-                            label_filename=_lname, attachment_filename=_aname,
-                        ))
-                        _s4.commit()
-                    st.success(f"✅ 발주 #{_selected_plan_id} 확정 완료")
-                    st.cache_data.clear()
-                except Exception as e:
-                    st.error(f"확정 실패: {e}")
     else:
         st.info("라벨 PDF와 물류부착문서 PDF를 업로드하세요.")
 
-    # === ⑤ 재고차감 / 마무리 (3차 결과물) ===
+    # === ⑥ 이지어드민 재고 차감 — 확장주문검색·배송일괄·송장 (발주 확정 후) ===
     if _mgmt_status in ("verified", "completed") and _label_pdf and _attach_pdf:
-        _step5_label = "⑤ 재고차감 / 마무리 (이지어드민 재고차감 파일)"
-        if _mgmt_status == "completed":
-            _step5_label += " ✅"
-        st.subheader(_step5_label)
+        st.markdown("#### 확장주문검색 / 배송일괄 처리 / 송장 업로드")
         _order_base3 = (_invoice.order_id if _invoice and _invoice.order_id else None) or (_mgmt_plan.milkrun_id or "")
 
         _os_uploaded = "order_search" in _mgmt_files
