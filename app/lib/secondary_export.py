@@ -64,6 +64,48 @@ def calc_weight_kg(item: SecondaryItem, boxes_in_section: int) -> float:
     return (item.weight_g * qty + 500 * boxes_in_section) / 1000
 
 
+def build_share_sheet_tsv(
+    items: list[SecondaryItem],
+    *,
+    request_date: date,
+    arrival_date: date,
+    company_short: str,
+    inbound_id: str,
+    status_text: str = "입고생성완료",
+    include_header: bool = False,
+) -> str:
+    """공유시트 데이터를 탭 구분 텍스트(TSV)로 반환 — 클립보드 복사용.
+
+    헤더 미포함이 기본 (기존 공유시트에 append 용도). include_header=True 면 헤더도 포함.
+    """
+    headers = [
+        "요청일", "번들요청일", "채널", "우선순위", "상품명", "유형",
+        "수량", "입수량", "박스수", "옵션ID", "소비기한",
+        "도착예정일", "입고ID", "처리상태",
+    ]
+    channel = f"{company_short}컴밀크런"
+    rd = request_date.isoformat()
+    ad = arrival_date.isoformat()
+    rows: list[list[str]] = []
+    if include_header:
+        rows.append(headers)
+    for it in items:
+        if it.boxes <= 0:
+            continue
+        name = it.wms_product_name or it.product_name or ""
+        _uq = int(it.unit_qty or 1)
+        type_str = "단품" if _uq <= 1 else f"{_uq}번들"
+        exp = it.expiry_date.isoformat() if it.expiry_date else ""
+        rows.append([
+            rd, rd, channel, "",            # 요청일/번들요청일/채널/우선순위
+            name, type_str,                  # 상품명/유형
+            str(int(it.inbound_qty)), str(int(it.box_qty)), str(int(it.boxes)),
+            str(it.coupang_option_id), exp,
+            ad, str(inbound_id), status_text,
+        ])
+    return "\n".join("\t".join(r) for r in rows)
+
+
 def build_share_sheet(
     items: list[SecondaryItem],
     *,

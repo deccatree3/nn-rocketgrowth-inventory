@@ -1958,39 +1958,33 @@ else:
                 file_name=f"밀크런_물류부착문서1 (팔레트부착문서)_{_fc}_{_datesuf}.pdf", mime="application/pdf",
                 use_container_width=True, type="primary")
 
-        # === 공유시트 기록용 파일 ===
+        # === 공유시트 기록 — 클립보드 복사용 ===
         st.markdown("##### 공유시트 기록")
-        _ss_col1, _ss_col2 = st.columns([2, 1])
-        with _ss_col1:
-            _inbound_id = st.text_input(
-                "입고ID",
-                key=f"share_sheet_inbound_id_{_selected_plan_id}",
-                help="공유시트의 '입고ID' 컬럼에 채울 값. 쿠팡 입고생성 후 발급된 ID를 입력하세요.",
-            )
-        from lib.secondary_export import build_share_sheet
-        _request_d = _mgmt_plan.plan_date or _arr
-        with _ss_col2:
-            if not _inbound_id.strip():
-                st.button("📥 공유시트 다운로드", disabled=True, use_container_width=True,
-                    help="입고ID 를 먼저 입력해주세요.")
-            else:
-                try:
-                    _ss_bytes = build_share_sheet(
-                        _sec_items,
-                        request_date=_request_d,
-                        arrival_date=_arr,
-                        company_short=cfg.default_company_name,
-                        inbound_id=_inbound_id.strip(),
-                    )
-                    st.download_button(
-                        "📥 공유시트 다운로드",
-                        data=_ss_bytes,
-                        file_name=f"공유시트_{_yymmdd}_{_fc}.xlsx",
-                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                        use_container_width=True, type="primary",
-                    )
-                except Exception as e:
-                    st.error(f"생성 실패: {e}")
+        _inbound_id = st.text_input(
+            "입고ID",
+            key=f"share_sheet_inbound_id_{_selected_plan_id}",
+            help="공유시트의 '입고ID' 컬럼에 채울 값. 쿠팡 입고생성 후 발급된 ID를 입력하세요.",
+        )
+        if _inbound_id.strip():
+            from lib.secondary_export import build_share_sheet_tsv
+            _request_d = _mgmt_plan.plan_date or _arr
+            try:
+                _ss_tsv = build_share_sheet_tsv(
+                    _sec_items,
+                    request_date=_request_d,
+                    arrival_date=_arr,
+                    company_short=cfg.default_company_name,
+                    inbound_id=_inbound_id.strip(),
+                )
+                st.caption(
+                    "아래 박스 우상단의 📋 아이콘을 클릭해 복사 → 공유시트(Google Sheets 등) 마지막 행 아래에 "
+                    "붙여넣기 (Ctrl+V) 하세요. 탭 구분이라 컬럼이 자동 분할됩니다."
+                )
+                st.code(_ss_tsv, language=None)
+            except Exception as e:
+                st.error(f"공유시트 데이터 생성 실패: {e}")
+        else:
+            st.caption("입고ID 를 입력하면 공유시트에 붙여넣을 데이터가 표시됩니다.")
 
         # === ⑤ 이지어드민 재고 차감 ===
         _step6_label = "⑤ 이지어드민 재고 차감"
