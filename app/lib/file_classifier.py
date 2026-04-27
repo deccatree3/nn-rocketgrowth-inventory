@@ -34,7 +34,7 @@ FILE_TYPE_LABELS = {
     FILE_TYPE_COUPANG: "쿠팡 재고",
     FILE_TYPE_WMS: "WMS 재고",
     FILE_TYPE_TEMPLATE: "쿠팡 입고생성",
-    FILE_TYPE_MOVEMENT: "쿠팡 재고이동",
+    FILE_TYPE_MOVEMENT: "재고이동",
     FILE_TYPE_UNKNOWN: "미분류",
 }
 
