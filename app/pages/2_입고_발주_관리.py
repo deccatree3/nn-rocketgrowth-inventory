@@ -1445,6 +1445,7 @@ else:
                 file_name=f"generated_excel_{date.today().isoformat()}.xlsx",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                 type="primary")
+            st.caption("생성된 파일을 쿠팡 입고관리에서 업로드 해주세요.")
             if _re_miss:
                 st.warning(f"⚠️ {len(_re_miss)}건 누락 (쿠팡 양식에 없는 옵션ID)")
         except Exception as e:
