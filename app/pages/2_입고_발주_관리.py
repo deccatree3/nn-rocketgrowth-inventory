@@ -588,12 +588,7 @@ if _is_new:
     if tpl_option_ids:
         cp_snap.rows = [r for r in cp_snap.rows if r.coupang_option_id in tpl_option_ids]
 
-    st.success(
-        f"파싱 완료: 쿠팡 {len(cp_snap.rows)}/{_cp_total_before}건 "
-        f"(업로드양식 {len(tpl_option_ids)}개 옵션 기준, {cp_snap.snapshot_date}) / "
-        f"WMS {len(wms_snap.rows)}행 → {len(wms_agg)} 바코드 ({wms_snap.snapshot_date}) "
-        f"— RELEASEAREA 제외"
-    )
+    st.success("4개 파일 업로드 완료")
 
     # --- 3. 제품 마스터 로드 --------------------------------------------------
     with get_session() as session:
