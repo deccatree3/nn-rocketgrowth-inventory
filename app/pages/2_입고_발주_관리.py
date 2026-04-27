@@ -1792,7 +1792,11 @@ else:
         if _mgmt_status in ("verified", "completed"):
             _step5_label += " ✅"
         st.subheader(_step5_label)
-        st.caption("아래 파일들을 다운로드해서 물류센터(다원로지스틱스)로 전달해주세요.")
+        st.caption(
+            "아래 파일들을 다운로드해서 메일로 송부 후, 단체 카톡방에 송부 완료 메세지를 남겨주세요. "
+            "메일 수신: minjiejie42@gmail.com, kim@nnutri.com, es@katchers.co.kr, "
+            "ysangh0913@gmail.com, jk@katchers.co.kr"
+        )
 
         _dc = st.columns(3)
         try:
