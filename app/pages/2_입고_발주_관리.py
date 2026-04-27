@@ -1409,6 +1409,7 @@ else:
     if _mgmt_step >= 4:
         _step3_label += " ✅"
     st.subheader(_step3_label)
+    st.caption("아래의 버튼을 클릭해서 파일을 다운로드 후 쿠팡의 입고관리에 업로드 해주세요.")
     _plan_df = pd.DataFrame([
         {
             "상품명": i.product_name,
@@ -1466,7 +1467,6 @@ else:
                 file_name=f"generated_excel_{date.today().isoformat()}.xlsx",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                 type="primary")
-            st.caption("다운로드된 파일을 쿠팡 입고관리에서 업로드 해주세요.")
             if _re_miss:
                 st.warning(f"⚠️ {len(_re_miss)}건 누락 (쿠팡 양식에 없는 옵션ID)")
         except Exception as e:
