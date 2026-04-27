@@ -1284,7 +1284,7 @@ if _is_new:
     st.divider()
     if confirmed_qty == 0:
         st.button(
-            "✅ 발주 수량 확정 → 다음 단계 (③ 쿠팡 입고생성 업로드 파일)",
+            "발주 수량 확정",
             disabled=True,
             use_container_width=True,
             help="확정 수량을 1개 이상 입력해야 다음 단계로 진행할 수 있습니다.",
@@ -1292,7 +1292,7 @@ if _is_new:
         st.caption("확정 수량을 입력한 후 이 버튼을 누르면 발주가 저장되고 ③ 단계로 진행합니다.")
     else:
         if st.button(
-            "✅ 발주 수량 확정 → 다음 단계 (③ 쿠팡 입고생성 업로드 파일)",
+            "발주 수량 확정",
             type="primary",
             use_container_width=True,
             help="현재 입력한 확정 수량을 저장하고 ③ 쿠팡 업로드 파일 단계로 이동합니다.",
