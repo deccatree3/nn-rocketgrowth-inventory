@@ -1768,37 +1768,55 @@ else:
                 return "✅" if v else "❌"
 
             _check_rows.append({
-                "확정수량": _sku.inbound_qty,
-                "소비기한": _sku.expected_expiry.isoformat() if _sku.expected_expiry else "",
-                "상품번호": str(_sku.sku_id) if _sku.sku_id else "",
+                "옵션ID": _sku.coupang_option_id,
+                "SKU ID": str(_sku.sku_id) if _sku.sku_id else "",
                 "상품명": _sku.product_name or "",
+                "수량": _sku.inbound_qty,
+                "소비기한": _sku.expected_expiry.isoformat() if _sku.expected_expiry else "",
                 "거래명세서 수량": (_inv.confirmed_qty if _inv else "—"),
-                "거래명세서 소비기한": (_inv.expiry.isoformat() if _inv and _inv.expiry else "—"),
                 "상품일치": _icon(_name_ok),
                 "발주수량": _icon(_qty_ok),
-                "거래명세서 소비기한 일치": _icon(_exp_ok),
+                "소비기한 일치": _icon(_exp_ok),
                 "라벨 인쇄": _icon(_label_ok),
                 "라벨 소비기한": _icon(_label_exp_ok),
             })
 
+        # === 요약 — 항목별 일치 여부 ===
+        def _all_pass(col: str) -> str:
+            for r in _check_rows:
+                v = r.get(col)
+                if v == "❌":
+                    return "❌"
+            return "✅"
+
+        # 팔레트수 일치 (글로벌)
+        _pallet_match = (
+            _pa.pallet_count == _attachment.total_pallets
+            if _attachment.total_pallets else False
+        )
+        # 박스수 일치 (거래명세서 총수량 검증과 동일)
+        _our_total_qty = sum(s.inbound_qty for s in _planned)
+        _inv_total_qty = _invoice.total_confirmed_qty if _invoice else None
+        if _inv_total_qty is not None:
+            _box_match = (_our_total_qty == _inv_total_qty)
+        else:
+            _box_match = True  # 거래명세서 미제공 시 자체검증 통과로 표시
+
+        _summary_rows = [
+            {"항목": "발주수량 일치", "일치 여부": _all_pass("발주수량")},
+            {"항목": "팔레트수 일치", "일치 여부": ("✅" if _pallet_match else "❌")},
+            {"항목": "박스수 일치", "일치 여부": ("✅" if _box_match else "❌")},
+            {"항목": "소비기한 일치", "일치 여부": _all_pass("소비기한 일치")},
+            {"항목": "라벨 인쇄 여부", "일치 여부": _all_pass("라벨 인쇄")},
+            {"항목": "라벨 소비기한 일치", "일치 여부": _all_pass("라벨 소비기한")},
+        ]
+        _sum_df = pd.DataFrame(_summary_rows)
+        st.markdown("##### 요약")
+        st.dataframe(_sum_df, use_container_width=False, hide_index=True, width=320)
+
+        st.markdown("##### 상세")
         _check_df = pd.DataFrame(_check_rows)
         st.dataframe(_check_df, use_container_width=True, hide_index=True, height=min(40 + 35 * len(_check_df), 600))
-
-        # === 전체(글로벌) 검수 항목 — 접어서 ===
-        with st.expander(f"전체 검수 항목 ({len(_report.checks)}건)", expanded=(_report.overall != "ok")):
-            _icon_map = {"ok": "✅", "warning": "⚠️", "fail": "❌"}
-            for _ck in _report.checks:
-                _lbl2 = f"{_icon_map.get(_ck.status, '•')} **{_ck.name}**"
-                if _ck.expected is not None and _ck.actual is not None:
-                    _lbl2 += f" — {_ck.actual} (예상 {_ck.expected})"
-                elif _ck.actual is not None:
-                    _lbl2 += f" — {_ck.actual}"
-                st.markdown(_lbl2)
-                if _ck.detail:
-                    st.caption(_ck.detail)
-                if _ck.items:
-                    with st.expander(f"세부 {len(_ck.items)}건"):
-                        st.dataframe(pd.DataFrame(_ck.items), use_container_width=True, hide_index=True)
 
         # === ③ 검수 끝 (이후 ④·⑤에서 사용할 변수 미리 준비) ===
         _order_base = (_invoice.order_id if _invoice and _invoice.order_id else _attachment.milkrun_id) or ""
