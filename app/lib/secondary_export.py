@@ -105,7 +105,9 @@ def build_share_sheet(
         ws.write_string(r, 2, channel)                    # 채널
         # 우선순위 (3) - 비움
         ws.write_string(r, 4, name)                       # 상품명
-        # 유형 (5) - 비움
+        # 유형: WMS 낱개수량(unit_qty) 기준 — 1이면 '단품', 2 이상이면 'N번들'
+        _uq = int(it.unit_qty or 1)
+        ws.write_string(r, 5, "단품" if _uq <= 1 else f"{_uq}번들")
         ws.write_number(r, 6, int(it.inbound_qty))        # 수량
         ws.write_number(r, 7, int(it.box_qty))            # 입수량
         ws.write_number(r, 8, int(it.boxes))              # 박스수
