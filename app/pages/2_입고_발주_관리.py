@@ -1767,10 +1767,19 @@ else:
                     return "—"
                 return "✅" if v else "❌"
 
+            # 상품명: WMS상품정보의 제품명 우선 → 부모 WMS 제품명 폴백 → 쿠팡 등록상품명
+            _wp_name = _mgmt_wms.get(_sku.own_wms_barcode) if _sku.own_wms_barcode else None
+            _pwp_name = _mgmt_wms.get(_sku.parent_wms_barcode) if _sku.parent_wms_barcode else None
+            _disp_name = (
+                (_wp_name.product_name if _wp_name and _wp_name.product_name else None)
+                or (_pwp_name.product_name if _pwp_name and _pwp_name.product_name else None)
+                or _sku.product_name
+                or ""
+            )
             _check_rows.append({
                 "옵션ID": _sku.coupang_option_id,
                 "SKU ID": str(_sku.sku_id) if _sku.sku_id else "",
-                "상품명": _sku.product_name or "",
+                "상품명": _disp_name,
                 "수량": _sku.inbound_qty,
                 "소비기한": _sku.expected_expiry.isoformat() if _sku.expected_expiry else "",
                 "거래명세서 수량": (_inv.confirmed_qty if _inv else "—"),
