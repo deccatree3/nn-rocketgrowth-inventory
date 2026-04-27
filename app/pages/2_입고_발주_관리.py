@@ -1572,15 +1572,13 @@ else:
     _mv_blob = _mgmt_plan.movement_template_blob
     _mv_fname = _mgmt_plan.movement_template_filename
 
-    _vc = st.columns(4)
+    _vc = st.columns(3)
     with _vc[0]:
         st.write("✅ 라벨" if _label_pdf else "❌ 라벨")
     with _vc[1]:
         st.write("✅ 물류부착" if _attach_pdf else "❌ 물류부착")
     with _vc[2]:
         st.write("✅ 물류동봉" if _invoice_pdf else "⬜ 물류동봉")
-    with _vc[3]:
-        st.write("✅ 재고이동건(DB)" if _mv_blob else "⚠️ 없음")
 
     if _label_pdf and _attach_pdf:
         _lb = _label_pdf.getvalue() if hasattr(_label_pdf, 'getvalue') else _label_pdf.read()
