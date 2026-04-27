@@ -424,16 +424,16 @@ if _is_new:
     st.caption("업로드할 파일 4종 (여러 업체 파일 섞어 올려도 자동 분류):")
 
     _UPLOAD_GUIDE_ROWS = [
-        ("WMS 재고현황 파일", FILE_TYPE_WMS,
+        ("WMS 재고 파일", FILE_TYPE_WMS,
          "다원WMS > 재고관리 > 창고별로케이션별재고(OWNER) > [품목-정상,불량-로케이션-로트] 탭 > 검색 > 우클릭, Export(Excel)",
          "Document_YYYY-MM-DD.xls"),
-        ("쿠팡 재고현황 파일", FILE_TYPE_COUPANG,
+        ("쿠팡 재고 파일", FILE_TYPE_COUPANG,
          "쿠팡Wing > 로켓그로스 > 재고현황 > 엑셀 다운로드",
          "inventory_health_sku_info_YYYYMMDDhhmmss.xlsx"),
-        ("쿠팡 입고생성 업로드 양식 파일", FILE_TYPE_TEMPLATE,
+        ("쿠팡 입고생성 파일", FILE_TYPE_TEMPLATE,
          "쿠팡Wing > 로켓그로스 > 입고관리 > 새로운 입고 생성 > 엑셀 다운로드",
          "generated_excel.xlsx"),
-        ("쿠팡 재고이동건 파일", FILE_TYPE_MOVEMENT,
+        ("쿠팡 재고이동 파일", FILE_TYPE_MOVEMENT,
          "이번달 '쿠팡 재고이동건' 파일",
          "쿠팡 재고이동건_YYYY_MM월.xlsx"),
     ]

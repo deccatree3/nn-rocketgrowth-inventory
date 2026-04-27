@@ -31,10 +31,10 @@ FILE_TYPE_MOVEMENT = "movement"
 FILE_TYPE_UNKNOWN = "unknown"
 
 FILE_TYPE_LABELS = {
-    FILE_TYPE_COUPANG: "쿠팡 재고현황",
-    FILE_TYPE_WMS: "WMS 재고현황",
-    FILE_TYPE_TEMPLATE: "쿠팡 업로드양식",
-    FILE_TYPE_MOVEMENT: "재고이동건",
+    FILE_TYPE_COUPANG: "쿠팡 재고",
+    FILE_TYPE_WMS: "WMS 재고",
+    FILE_TYPE_TEMPLATE: "쿠팡 입고생성",
+    FILE_TYPE_MOVEMENT: "쿠팡 재고이동",
     FILE_TYPE_UNKNOWN: "미분류",
 }
 
