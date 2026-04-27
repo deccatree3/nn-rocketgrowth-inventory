@@ -1975,6 +1975,7 @@ else:
                     arrival_date=_arr,
                     company_short=cfg.default_company_name,
                     inbound_id=_inbound_id.strip(),
+                    pallet_assignment=_pa,
                 )
                 st.caption(
                     "아래 박스 우상단의 📋 아이콘을 클릭해 복사 → 공유시트(Google Sheets 등) 마지막 행 아래에 "

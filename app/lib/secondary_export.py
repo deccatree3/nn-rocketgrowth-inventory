@@ -73,10 +73,12 @@ def build_share_sheet_tsv(
     inbound_id: str,
     status_text: str = "입고생성완료",
     include_header: bool = False,
+    pallet_assignment: PalletAssignment | None = None,
 ) -> str:
     """공유시트 데이터를 탭 구분 텍스트(TSV)로 반환 — 클립보드 복사용.
 
     헤더 미포함이 기본 (기존 공유시트에 append 용도). include_header=True 면 헤더도 포함.
+    pallet_assignment 가 주어지면 취합리스트와 동일한 팔레트 순서로 정렬.
     """
     headers = [
         "요청일", "번들요청일", "채널", "우선순위", "상품명", "유형",
@@ -86,12 +88,30 @@ def build_share_sheet_tsv(
     channel = f"{company_short}컴밀크런"
     rd = request_date.isoformat()
     ad = arrival_date.isoformat()
+
+    # 팔레트 할당이 있으면 취합리스트와 동일 순서 (팔레트1 → 팔레트2 → ...)
+    if pallet_assignment is not None:
+        item_by_opt = {it.coupang_option_id: it for it in items}
+        ordered: list[SecondaryItem] = []
+        seen: set[int] = set()
+        for pallet in pallet_assignment.pallets:
+            for entry in pallet:
+                it = item_by_opt.get(entry.key)
+                if it and it.coupang_option_id not in seen and it.boxes > 0:
+                    ordered.append(it)
+                    seen.add(it.coupang_option_id)
+        # 팔레트 미할당 / boxes>0 인데 누락된 항목 폴백
+        for it in items:
+            if it.boxes > 0 and it.coupang_option_id not in seen:
+                ordered.append(it)
+                seen.add(it.coupang_option_id)
+    else:
+        ordered = [it for it in items if it.boxes > 0]
+
     rows: list[list[str]] = []
     if include_header:
         rows.append(headers)
-    for it in items:
-        if it.boxes <= 0:
-            continue
+    for it in ordered:
         name = it.wms_product_name or it.product_name or ""
         _uq = int(it.unit_qty or 1)
         type_str = "단품" if _uq <= 1 else f"{_uq}번들"
