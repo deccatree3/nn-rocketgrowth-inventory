@@ -278,11 +278,11 @@ STATUS_LABELS = {"draft": "📝 임시저장", "verified": "✅ 발주확정", "
 # 단계별 UI helper (5단계 위저드)
 # ---------------------------------------------------------------------------
 _WIZARD_STEPS = [
-    ("①", "📦", "기초자료 업로드"),
-    ("②", "🛒", "발주 수량 확정"),
-    ("③", "📥", "쿠팡 업로드 파일"),
-    ("④", "📑", "검수 & 물류센터"),
-    ("⑤", "🏁", "결과 등록"),
+    ("①", "", "기초자료 업로드"),
+    ("②", "", "발주 수량 확정"),
+    ("③", "", "쿠팡 업로드 파일"),
+    ("④", "", "검수 & 물류센터"),
+    ("⑤", "", "결과 등록"),
 ]
 
 
@@ -303,7 +303,7 @@ def _render_stepper(current: int, completed: set[int] | frozenset[int] = frozens
             f'white-space:nowrap; overflow:hidden; text-overflow:ellipsis; '
             f'font-size:0.9em;">'
             f'<span style="font-size:1.05em; margin-right:4px;">{mark}</span>'
-            f'<span>{icon} {label}</span>'
+            f'<span>{(icon + " ") if icon else ""}{label}</span>'
             f'</div>'
         )
         if idx < len(_WIZARD_STEPS):
@@ -414,7 +414,7 @@ if _is_new:
     _stepper_ph.markdown(_render_stepper(current=1, completed=set()), unsafe_allow_html=True)
 
         # --- ① 기초자료 업로드 -----------------------------------------------------
-    st.subheader("📦 ① 기초자료 업로드")
+    st.subheader("① 기초자료 업로드")
 
     from lib.file_classifier import (
         FILE_TYPE_COUPANG, FILE_TYPE_WMS, FILE_TYPE_TEMPLATE, FILE_TYPE_MOVEMENT,
@@ -872,7 +872,7 @@ if _is_new:
     #   B. 밀크런 출고 후 잔여 낱개 < 부모 풀 합산 판매속도 × 재생산리드타임(28일)
     #       = 재생산 리드타임 동안 버틸 수 없음
     # 정확 계산이 아닌 "트리거" 성격 — 상세 분석은 별도 메뉴에서 수행 예정.
-    st.subheader("🛒 ② 발주 수량 확정")
+    st.subheader("② 발주 수량 확정")
 
     reproduction_lead = cfg.reproduction_lead_days  # 기본 28일
 
@@ -1384,7 +1384,7 @@ else:
         st.stop()
 
     # === ③ 쿠팡 입고생성 업로드 파일 (계획 요약 포함) ===
-    _step3_label = "📥 ③ 쿠팡 입고생성 업로드 파일"
+    _step3_label = "③ 쿠팡 입고생성 업로드 파일"
     if _mgmt_step >= 4:
         _step3_label += " ✅"
     with st.expander(_step3_label, expanded=(_mgmt_status == "draft" and _mgmt_step == 3)):
@@ -1513,7 +1513,7 @@ else:
         _pa = pa_assign_pallets(_pa_items, pallet_size=cfg.pallet_size_boxes)
 
     # === ④ 검수 & 물류센터 전달 파일 ===
-    _step4_label = "📑 ④ 검수 & 물류센터 전달 파일"
+    _step4_label = "④ 검수 & 물류센터 전달 파일"
     if _mgmt_status in ("verified", "completed"):
         _step4_label += " ✅"
     with st.expander(_step4_label, expanded=(_mgmt_status == "draft")):
@@ -1786,7 +1786,7 @@ else:
 
     # === ⑤ 재고차감 / 마무리 (3차 결과물) ===
     if _mgmt_status in ("verified", "completed") and _label_pdf and _attach_pdf:
-        _step5_label = "🏁 ⑤ 재고차감 / 마무리 (이지어드민 재고차감 파일)"
+        _step5_label = "⑤ 재고차감 / 마무리 (이지어드민 재고차감 파일)"
         if _mgmt_status == "completed":
             _step5_label += " ✅"
         with st.expander(_step5_label, expanded=(_mgmt_status == "verified")):
