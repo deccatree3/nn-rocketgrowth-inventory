@@ -1823,6 +1823,24 @@ else:
         st.markdown("##### 요약")
         st.dataframe(_sum_df, use_container_width=False, hide_index=True, width=320)
 
+        # === 확인 필요 항목 — status != ok 인 글로벌 체크만 (모두 정상이면 미표시) ===
+        _attention = [c for c in _report.checks if c.status != "ok"]
+        if _attention:
+            _icon_map = {"ok": "✅", "warning": "⚠️", "fail": "❌"}
+            st.markdown("##### 확인 필요 항목")
+            for _ck in _attention:
+                _lbl_a = f"{_icon_map.get(_ck.status, '•')} **{_ck.name}**"
+                if _ck.expected is not None and _ck.actual is not None:
+                    _lbl_a += f" — {_ck.actual} (예상 {_ck.expected})"
+                elif _ck.actual is not None:
+                    _lbl_a += f" — {_ck.actual}"
+                st.markdown(_lbl_a)
+                if _ck.detail:
+                    st.caption(_ck.detail)
+                if _ck.items:
+                    with st.expander(f"세부 {len(_ck.items)}건"):
+                        st.dataframe(pd.DataFrame(_ck.items), use_container_width=True, hide_index=True)
+
         st.markdown("##### 상세")
         _check_df = pd.DataFrame(_check_rows)
         st.dataframe(_check_df, use_container_width=True, hide_index=True, height=min(40 + 35 * len(_check_df), 600))

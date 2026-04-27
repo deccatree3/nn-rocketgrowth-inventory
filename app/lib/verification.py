@@ -340,34 +340,9 @@ def verify(
     else:
         report.add(CheckItem(name="소비기한 일치", status="ok"))
 
-    # ----- 6. 제품명 fuzzy 매칭 (낮은 유사도만 경고) -----
-    name_low = []
-    for bc, sku in expected_labels.items():
-        if bc not in labels:
-            continue
-        our_name = " ".join(filter(None, [sku.product_name, sku.option_name]))
-        label_name = labels[bc].raw_name or ""
-        sim = name_similarity(our_name, label_name)
-        if sim < name_similarity_threshold:
-            name_low.append(
-                {
-                    "barcode": bc,
-                    "our_name": our_name,
-                    "label_name": label_name,
-                    "similarity": round(sim, 2),
-                }
-            )
-    if name_low:
-        report.add(
-            CheckItem(
-                name="제품명 매칭",
-                status="warning",
-                detail=f"{len(name_low)}건 유사도 낮음 (수동 확인)",
-                items=name_low,
-            )
-        )
-    else:
-        report.add(CheckItem(name="제품명 매칭", status="ok"))
+    # ----- 6. 제품명 fuzzy 매칭 (제거)
+    # 바코드 매칭이 권위이고, pdfplumber 의 텍스트 추출이 동일 페이지의 여러 상품명을
+    # 한 라벨로 끌어와 유사도가 false-positive 로 떨어지는 케이스가 빈번해 검수에서 제외.
 
     # ----- 7. 재고이동건 입고수량 합 = 번들작업표 수량 합 -----
     bundle_skus = [s for s in planned_skus if s.unit_qty and s.unit_qty >= 2 and s.inbound_qty > 0]
