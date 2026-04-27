@@ -1540,6 +1540,50 @@ else:
     if _mgmt_status in ("verified", "completed"):
         _step4_label += " ✅"
     st.subheader(_step4_label)
+    st.caption(
+        "쿠팡 입고생성 결과물을 업로드 해주세요. "
+        "바코드 라벨 다운로드 시 소비기한 표기 체크는 필수이며, 번들 상품만 적용합니다."
+    )
+
+    _STEP4_GUIDE_ROWS = [
+        ("바코드 라벨",
+         "sku-barcode-labels-YYYYMMDD_hhmmss.pdf",
+         "쿠팡Wing &gt; 로켓그로스 &gt; 입고관리 &gt; 해당 회차의 [상세보기] &gt; 바코드 인쇄"
+         "<br>(번들 상품만, 소비기한 표기 체크 필수)"),
+        ("동봉 문서",
+         "물류동봉문서_YYYYMMDD_hhmmss.pdf",
+         "쿠팡Wing &gt; 로켓그로스 &gt; 입고관리 &gt; 해당 회차의 [상세보기] &gt; 동봉문서 인쇄"),
+        ("부착 문서",
+         "물류부착문서_YYYYMMDD_hhmmss.pdf",
+         "쿠팡Wing &gt; 로켓그로스 &gt; 입고관리 &gt; 해당 회차의 [상세보기] &gt; 부착문서 인쇄"),
+    ]
+
+    def _render_step4_guide(uploaded: dict[str, bool]) -> str:
+        body = ""
+        for label, fname_example, path in _STEP4_GUIDE_ROWS:
+            mark = "✅" if uploaded.get(label) else ""
+            body += (
+                f"<tr><td>{label}</td>"
+                f'<td><code style="font-size:0.85em;">{fname_example}</code></td>'
+                f"<td>{path}</td>"
+                f'<td style="width:90px; text-align:center; white-space:nowrap;">{mark}</td>'
+                f"</tr>"
+            )
+        return (
+            '<table style="border-collapse: collapse; width: 100%;">'
+            '<thead><tr>'
+            '<th style="text-align:left;">구분</th>'
+            '<th style="text-align:left;">파일명 예시</th>'
+            '<th style="text-align:left;">경로</th>'
+            '<th style="width:90px; text-align:center; white-space:nowrap;">업로드</th>'
+            '</tr></thead>'
+            f'<tbody>{body}</tbody>'
+            '</table>'
+        )
+
+    _step4_guide_ph = st.empty()
+    _step4_guide_ph.markdown(_render_step4_guide({}), unsafe_allow_html=True)
+
     _pdf_up = st.file_uploader(
         "쿠팡 입고생성 결과물 파일(PDF 3개)를 업로드",
         type=["pdf"], accept_multiple_files=True,
@@ -1572,13 +1616,15 @@ else:
     _mv_blob = _mgmt_plan.movement_template_blob
     _mv_fname = _mgmt_plan.movement_template_filename
 
-    _vc = st.columns(3)
-    with _vc[0]:
-        st.write("✅ 라벨" if _label_pdf else "❌ 라벨")
-    with _vc[1]:
-        st.write("✅ 물류부착" if _attach_pdf else "❌ 물류부착")
-    with _vc[2]:
-        st.write("✅ 물류동봉" if _invoice_pdf else "⬜ 물류동봉")
+    # 가이드 테이블 업로드 칸 갱신
+    _step4_guide_ph.markdown(
+        _render_step4_guide({
+            "바코드 라벨": bool(_label_pdf),
+            "동봉 문서": bool(_invoice_pdf),
+            "부착 문서": bool(_attach_pdf),
+        }),
+        unsafe_allow_html=True,
+    )
 
     if _label_pdf and _attach_pdf:
         _lb = _label_pdf.getvalue() if hasattr(_label_pdf, 'getvalue') else _label_pdf.read()
