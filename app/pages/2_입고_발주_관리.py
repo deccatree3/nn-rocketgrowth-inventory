@@ -1441,9 +1441,10 @@ else:
             ))
         try:
             _re_xlsx, _re_miss = fill_coupang_template(io.BytesIO(_tpl_bytes), _re_export, delete_non_target=True)
-            st.download_button("📥 쿠팡 입고생성 업로드 파일 재생성", data=_re_xlsx,
+            st.download_button("쿠팡 입고생성 파일 생성", data=_re_xlsx,
                 file_name=f"generated_excel_{date.today().isoformat()}.xlsx",
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                type="primary")
             if _re_miss:
                 st.warning(f"⚠️ {len(_re_miss)}건 누락 (쿠팡 양식에 없는 옵션ID)")
         except Exception as e:
