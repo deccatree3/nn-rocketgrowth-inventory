@@ -278,12 +278,11 @@ STATUS_LABELS = {"draft": "📝 임시저장", "verified": "✅ 발주확정", "
 # 단계별 UI helper (5단계 위저드)
 # ---------------------------------------------------------------------------
 _WIZARD_STEPS = [
-    ("①", "", "기초자료 업로드"),
-    ("②", "", "발주 수량 확정"),
-    ("③", "", "쿠팡 입고생성 파일 생성"),
-    ("④", "", "쿠팡 입고생성 결과물 검수"),
-    ("⑤", "", "물류센터 전달 파일 생성"),
-    ("⑥", "", "이지어드민 재고 차감"),
+    ("①", "", "기초자료 취합 / 발주 수량 확정"),
+    ("②", "", "쿠팡 입고생성 파일 생성"),
+    ("③", "", "쿠팡 입고생성 결과물 검수"),
+    ("④", "", "물류센터 전달 파일 생성"),
+    ("⑤", "", "이지어드민 재고 차감"),
 ]
 
 
@@ -345,15 +344,15 @@ def _render_context_bar(plan, has_pdfs: bool = False) -> str:
 
 
 def _management_current_step(status: str, has_pdfs: bool) -> int:
-    """관리 모드 현재 단계 추정."""
+    """관리 모드 현재 단계 추정 (① 통합 후 5단계 기준)."""
     if status == "completed":
-        return 6
+        return 5
     if status == "verified":
-        return 5  # 발주 확정 완료, ⑤·⑥(물류센터/이지어드민) 진행 중
+        return 4  # 발주 확정 완료, ④·⑤(물류센터/이지어드민) 진행 중
     # status == "draft"
     if has_pdfs:
-        return 4  # 검수 진행 중
-    return 3
+        return 3  # 검수 진행 중
+    return 2  # 쿠팡 입고생성 파일 다운로드 단계
 
 
 # ---------------------------------------------------------------------------
@@ -414,15 +413,16 @@ if _is_new:
     _stepper_ph = st.empty()
     _stepper_ph.markdown(_render_stepper(current=1, completed=set()), unsafe_allow_html=True)
 
-        # --- ① 기초자료 업로드 -----------------------------------------------------
-    st.subheader("① 기초자료 업로드")
+        # --- ① 기초자료 취합 / 발주 수량 확정 (1-1, 1-2 sub-sections) ----------
+    st.subheader("① 기초자료 취합 / 발주 수량 확정")
 
     from lib.file_classifier import (
         FILE_TYPE_COUPANG, FILE_TYPE_WMS, FILE_TYPE_TEMPLATE, FILE_TYPE_MOVEMENT,
         FILE_TYPE_LABELS, CompanyFileGroup, classify_uploaded_files,
     )
 
-    st.caption("기초자료 4개 파일을 업로드해주세요.")
+    st.markdown("##### 1-1 기초자료 업로드")
+    st.caption("발주수량확정에 필요한 기초 자료를 취합하여 업로드해 주세요.")
 
     _UPLOAD_GUIDE_ROWS = [
         ("WMS 재고 파일", FILE_TYPE_WMS,
@@ -882,10 +882,9 @@ if _is_new:
     #   B. 밀크런 출고 후 잔여 낱개 < 부모 풀 합산 판매속도 × 재생산리드타임(28일)
     #       = 재생산 리드타임 동안 버틸 수 없음
     # 정확 계산이 아닌 "트리거" 성격 — 상세 분석은 별도 메뉴에서 수행 예정.
-    st.subheader("② 발주 수량 확정")
+    st.markdown("##### 1-2 발주 수량 확정")
     st.caption(
-        "각 SKU의 입고 수량을 검토·조정한 후 하단의 '발주 수량 확정' 버튼을 눌러주세요. "
-        "검색·필터·팔레트 최적화로 수량을 조정할 수 있습니다."
+        "재발주 필요 품목 Check 항목 및 발주 수량을 검토한 후, '발주 수량 확정' 버튼을 눌러주세요."
     )
 
     reproduction_lead = cfg.reproduction_lead_days  # 기본 28일
@@ -1314,13 +1313,13 @@ if _is_new:
             use_container_width=True,
             help="확정 수량을 1개 이상 입력해야 다음 단계로 진행할 수 있습니다.",
         )
-        st.caption("확정 수량을 입력한 후 이 버튼을 누르면 발주가 저장되고 ③ 단계로 진행합니다.")
+        st.caption("확정 수량을 입력한 후 이 버튼을 누르면 발주가 저장되고 ② 단계로 진행합니다.")
     else:
         if st.button(
             "발주 수량 확정",
             type="primary",
             use_container_width=True,
-            help="현재 입력한 확정 수량을 저장하고 ③ 쿠팡 업로드 파일 단계로 이동합니다.",
+            help="현재 입력한 확정 수량을 저장하고 ② 쿠팡 입고생성 파일 단계로 이동합니다.",
         ):
             try:
                 save_df = allocated_df.copy()
@@ -1347,7 +1346,7 @@ if _is_new:
                     raw_files=_raw_files,
                 )
                 st.success(
-                    f"발주 수량 확정 완료 (plan_id={plan_id}). ③ 쿠팡 입고생성 업로드 파일 단계로 이동합니다."
+                    f"발주 수량 확정 완료 (plan_id={plan_id}). ② 쿠팡 입고생성 파일 단계로 이동합니다."
                 )
                 st.session_state["_pending_plan_id"] = plan_id
                 st.rerun()
@@ -1372,16 +1371,16 @@ else:
     # === 상단: 회차 컨텍스트 바 + 5단계 스테퍼 ===
     st.markdown(_render_context_bar(_mgmt_plan), unsafe_allow_html=True)
 
-    # 스테퍼: status 기반 단계 추정. 1·2 단계는 항상 완료 (저장된 계획).
+    # 스테퍼: status 기반 단계 추정. ① (기초자료 취합 / 발주 수량 확정) 은 항상 완료.
     _mgmt_step = _management_current_step(_mgmt_status, has_pdfs=False)
-    _mgmt_completed: set[int] = {1, 2}
-    if _mgmt_step >= 4:
-        _mgmt_completed.add(3)
+    _mgmt_completed: set[int] = {1}
+    if _mgmt_step >= 3:
+        _mgmt_completed.add(2)
     if _mgmt_status in ("verified", "completed"):
-        _mgmt_completed.add(4)
+        _mgmt_completed.add(3)
     if _mgmt_status == "completed":
+        _mgmt_completed.add(4)
         _mgmt_completed.add(5)
-        _mgmt_completed.add(6)
     st.markdown(
         _render_stepper(current=_mgmt_step, completed=_mgmt_completed),
         unsafe_allow_html=True,
@@ -1408,9 +1407,9 @@ else:
         st.warning("이 계획에 확정 수량(>0) SKU가 없습니다.")
         st.stop()
 
-    # === ③ 쿠팡 입고생성 업로드 파일 (계획 요약 포함) ===
-    _step3_label = "③ 쿠팡 입고생성 파일 생성"
-    if _mgmt_step >= 4:
+    # === ② 쿠팡 입고생성 파일 (계획 요약 포함) ===
+    _step3_label = "② 쿠팡 입고생성 파일 생성"
+    if _mgmt_step >= 3:
         _step3_label += " ✅"
     st.subheader(_step3_label)
     st.caption("아래의 버튼을 클릭해서 파일을 다운로드 후 쿠팡의 입고관리에 업로드 해주세요.")
@@ -1539,8 +1538,8 @@ else:
         ]
         _pa = pa_assign_pallets(_pa_items, pallet_size=cfg.pallet_size_boxes)
 
-    # === ④ 쿠팡 입고생성 결과물 검수 ===
-    _step4_label = "④ 쿠팡 입고생성 결과물 검수"
+    # === ③ 쿠팡 입고생성 결과물 검수 ===
+    _step4_label = "③ 쿠팡 입고생성 결과물 검수"
     if _mgmt_status in ("verified", "completed"):
         _step4_label += " ✅"
     st.subheader(_step4_label)
@@ -1736,7 +1735,7 @@ else:
                 with st.expander(f"세부 {len(_ck.items)}건"):
                     st.dataframe(pd.DataFrame(_ck.items), use_container_width=True, hide_index=True)
 
-        # === ④ 검수 끝 (이후 ⑤·⑥에서 사용할 변수 미리 준비) ===
+        # === ③ 검수 끝 (이후 ④·⑤에서 사용할 변수 미리 준비) ===
         _order_base = (_invoice.order_id if _invoice and _invoice.order_id else _attachment.milkrun_id) or ""
         _fc = _attachment.fc_name or _mgmt_plan.fc_name or "FC"
         _arr = _attachment.arrival_date or _mgmt_plan.arrival_date or date.today()
@@ -1787,8 +1786,8 @@ else:
                 except Exception as e:
                     st.error(f"확정 실패: {e}")
 
-        # === ⑤ 물류센터 전달 파일 생성 ===
-        _step5_label = "⑤ 물류센터 전달 파일 생성"
+        # === ④ 물류센터 전달 파일 생성 ===
+        _step5_label = "④ 물류센터 전달 파일 생성"
         if _mgmt_status in ("verified", "completed"):
             _step5_label += " ✅"
         st.subheader(_step5_label)
@@ -1849,8 +1848,8 @@ else:
                 file_name=f"밀크런_물류부착문서1 (팔레트부착문서)_{_fc}_{_datesuf}.pdf", mime="application/pdf",
                 use_container_width=True, type="primary")
 
-        # === ⑥ 이지어드민 재고 차감 ===
-        _step6_label = "⑥ 이지어드민 재고 차감"
+        # === ⑤ 이지어드민 재고 차감 ===
+        _step6_label = "⑤ 이지어드민 재고 차감"
         if _mgmt_status == "completed":
             _step6_label += " ✅"
         st.subheader(_step6_label)
@@ -1872,7 +1871,7 @@ else:
     else:
         st.info("라벨 PDF와 물류부착문서 PDF를 업로드하세요.")
 
-    # === ⑥ 이지어드민 재고 차감 — 확장주문검색·배송일괄·송장 (발주 확정 후) ===
+    # === ⑤ 이지어드민 재고 차감 — 확장주문검색·배송일괄·송장 (발주 확정 후) ===
     if _mgmt_status in ("verified", "completed") and _label_pdf and _attach_pdf:
         st.markdown("#### 확장주문검색 / 배송일괄 처리 / 송장 업로드")
         _order_base3 = (_invoice.order_id if _invoice and _invoice.order_id else None) or (_mgmt_plan.milkrun_id or "")
