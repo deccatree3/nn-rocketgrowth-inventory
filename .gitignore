@@ -13,6 +13,9 @@
 /*.jpeg
 /*.gif
 
+# Streamlit Cloud 배포 로그 (디버깅 아티팩트)
+/logs-*.txt
+
 # 기타
 /desktop.ini
 /.DS_Store
