@@ -279,7 +279,7 @@ STATUS_LABELS = {"draft": "📝 임시저장", "verified": "✅ 발주확정", "
 # 단계별 UI helper (5단계 위저드)
 # ---------------------------------------------------------------------------
 _WIZARD_STEPS = [
-    ("①", "", "기초자료 취합 / 발주 수량 확정"),
+    ("①", "", "기초자료 취합 / 입고 수량 확정"),
     ("②", "", "쿠팡 입고생성 파일 생성"),
     ("③", "", "쿠팡 입고생성 결과물 검수"),
     ("④", "", "물류센터 전달 파일 생성"),
@@ -425,8 +425,8 @@ if _is_new:
     _stepper_ph = st.empty()
     _stepper_ph.markdown(_render_stepper(current=1, completed=set()), unsafe_allow_html=True)
 
-        # --- ① 기초자료 취합 / 발주 수량 확정 (1-1, 1-2 sub-sections) ----------
-    st.subheader("① 기초자료 취합 / 발주 수량 확정")
+        # --- ① 기초자료 취합 / 입고 수량 확정 (1-1, 1-2 sub-sections) ----------
+    st.subheader("① 기초자료 취합 / 입고 수량 확정")
 
     from lib.file_classifier import (
         FILE_TYPE_COUPANG, FILE_TYPE_WMS, FILE_TYPE_TEMPLATE, FILE_TYPE_MOVEMENT,
@@ -434,7 +434,7 @@ if _is_new:
     )
 
     st.markdown("##### 1-1 기초자료 업로드")
-    _section_note("발주수량확정에 필요한 기초 자료를 취합하여 업로드해 주세요.")
+    _section_note("입고수량확정에 필요한 기초 자료를 취합하여 업로드해 주세요.")
 
     _UPLOAD_GUIDE_ROWS = [
         ("WMS 재고 파일", FILE_TYPE_WMS,
@@ -868,9 +868,9 @@ if _is_new:
     #   B. 밀크런 출고 후 잔여 낱개 < 부모 풀 합산 판매속도 × 재생산리드타임(28일)
     #       = 재생산 리드타임 동안 버틸 수 없음
     # 정확 계산이 아닌 "트리거" 성격 — 상세 분석은 별도 메뉴에서 수행 예정.
-    st.markdown("##### 1-2 발주 수량 확정")
+    st.markdown("##### 1-2 입고 수량 확정")
     _section_note(
-        "재발주 필요 품목 Check 항목 및 발주 수량을 검토한 후, '발주 수량 확정' 버튼을 눌러주세요."
+        "재발주 필요 품목 Check 항목 및 입고 수량을 검토한 후, '입고 수량 확정' 버튼을 눌러주세요."
     )
 
     reproduction_lead = cfg.reproduction_lead_days  # 기본 28일
@@ -1290,11 +1290,11 @@ if _is_new:
             else:
                 st.caption("조정 없음")
 
-    # === ② 끝: 발주 수량 확정 버튼 ===
+    # === ② 끝: 입고 수량 확정 버튼 ===
     st.divider()
     if confirmed_qty == 0:
         st.button(
-            "발주 수량 확정",
+            "입고 수량 확정",
             disabled=True,
             use_container_width=True,
             help="확정 수량을 1개 이상 입력해야 다음 단계로 진행할 수 있습니다.",
@@ -1302,7 +1302,7 @@ if _is_new:
         st.caption("확정 수량을 입력한 후 이 버튼을 누르면 발주가 저장되고 ② 단계로 진행합니다.")
     else:
         if st.button(
-            "발주 수량 확정",
+            "입고 수량 확정",
             type="primary",
             use_container_width=True,
             help="현재 입력한 확정 수량을 저장하고 ② 쿠팡 입고생성 파일 단계로 이동합니다.",
@@ -1332,7 +1332,7 @@ if _is_new:
                     raw_files=_raw_files,
                 )
                 st.success(
-                    f"발주 수량 확정 완료 (plan_id={plan_id}). ② 쿠팡 입고생성 파일 단계로 이동합니다."
+                    f"입고 수량 확정 완료 (plan_id={plan_id}). ② 쿠팡 입고생성 파일 단계로 이동합니다."
                 )
                 st.session_state["_pending_plan_id"] = plan_id
                 st.rerun()
@@ -1357,7 +1357,7 @@ else:
     # === 상단: 회차 컨텍스트 바 + 5단계 스테퍼 ===
     st.markdown(_render_context_bar(_mgmt_plan), unsafe_allow_html=True)
 
-    # 스테퍼: status 기반 단계 추정. ① (기초자료 취합 / 발주 수량 확정) 은 항상 완료.
+    # 스테퍼: status 기반 단계 추정. ① (기초자료 취합 / 입고 수량 확정) 은 항상 완료.
     _mgmt_step = _management_current_step(_mgmt_status, has_pdfs=False)
     _mgmt_completed: set[int] = {1}
     if _mgmt_step >= 3:
