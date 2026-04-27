@@ -1,4 +1,4 @@
-"""제품 마스터 편집 — WMS상품 / 쿠팡상품 두 탭.
+"""상품 정보 관리 — WMS상품 / 쿠팡상품 두 탭.
 
 wms_product:
   WMS바코드 PK, 박스낱수, 중량, 유통기한일수, 부모바코드 등 (물리 속성)
@@ -42,12 +42,107 @@ def _nullable_bool(v, default=False):
     return bool(v)
 
 
-st.set_page_config(page_title="제품 마스터", page_icon="📋", layout="wide")
-st.title("📋 제품 마스터")
+st.set_page_config(page_title="상품 정보 관리", page_icon="📋", layout="wide")
+st.title("📋 상품 정보 관리")
 st.caption(
     "WMS상품(물리 속성: 박스낱수/중량/유통기한일수)과 쿠팡상품(옵션/수동입고여부)은 "
     "별도로 관리되며 WMS바코드로 연결됩니다."
 )
+
+# =========================================================================
+# 📥 현재 마스터 다운로드 (수정·보완 후 재업로드용)
+# =========================================================================
+def _build_master_xlsx() -> bytes:
+    """현재 DB 의 WMS상품정보·쿠팡상품정보 를 마스터 파일 포맷으로 xlsx 생성."""
+    from io import BytesIO
+    import xlsxwriter as _xw
+
+    with get_session() as s:
+        wms_rows = s.execute(select(WmsProduct).order_by(WmsProduct.wms_barcode)).scalars().all()
+        cp_rows = s.execute(select(CoupangProduct).order_by(CoupangProduct.coupang_option_id)).scalars().all()
+
+    wms_headers = [
+        "WMS바코드", "제품명", "낱개수량", "부모_WMS바코드",
+        "1카톤박스입수량", "중량", "소비기한일수", "옵션ID", "부모_옵션ID",
+    ]
+    cp_headers = [
+        "등록상품 ID", "옵션 ID", "SKU ID", "등록상품명", "옵션명",
+        "상품등급", "상품등록일", "수동입고여부",
+        "WMS바코드", "쿠팡바코드", "WMS바코드-반품",
+    ]
+
+    buf = BytesIO()
+    wb = _xw.Workbook(buf, {"in_memory": True})
+    hdr_fmt = wb.add_format({"bold": True, "bg_color": "#f0f0f0", "border": 1})
+    date_fmt = wb.add_format({"num_format": "yyyy-mm-dd"})
+
+    # WMS상품정보 시트
+    ws1 = wb.add_worksheet("WMS상품정보")
+    for c, h in enumerate(wms_headers):
+        ws1.write_string(0, c, h, hdr_fmt)
+    for r, w in enumerate(wms_rows, start=1):
+        vals = [w.wms_barcode, w.product_name, w.unit_qty, w.parent_wms_barcode,
+                w.box_qty, w.weight_g, w.shelf_life_days, w.coupang_option_id, w.parent_coupang_option_id]
+        for c, v in enumerate(vals):
+            if v is None:
+                continue
+            if isinstance(v, bool):
+                ws1.write_boolean(r, c, v)
+            elif isinstance(v, (int, float)):
+                ws1.write_number(r, c, v)
+            else:
+                ws1.write_string(r, c, str(v))
+    ws1.set_column(0, 0, 18)
+    ws1.set_column(1, 1, 40)
+    ws1.freeze_panes(1, 0)
+
+    # 쿠팡상품정보 시트
+    ws2 = wb.add_worksheet("쿠팡상품정보")
+    for c, h in enumerate(cp_headers):
+        ws2.write_string(0, c, h, hdr_fmt)
+    for r, p in enumerate(cp_rows, start=1):
+        for c, v in enumerate([
+            p.coupang_product_id, p.coupang_option_id, p.sku_id,
+            p.product_name, p.option_name,
+            p.grade, p.registered_at, p.milkrun_managed,
+            p.wms_barcode, p.coupang_barcode, p.wms_barcode_return,
+        ]):
+            if v is None:
+                continue
+            # 상품등록일 (registered_at) 은 date 형식
+            if hasattr(v, "strftime") and not isinstance(v, str):
+                try:
+                    ws2.write_datetime(r, c, v, date_fmt)
+                    continue
+                except Exception:
+                    ws2.write_string(r, c, str(v))
+                    continue
+            if isinstance(v, bool):
+                ws2.write_boolean(r, c, v)
+            elif isinstance(v, (int, float)):
+                ws2.write_number(r, c, v)
+            else:
+                ws2.write_string(r, c, str(v))
+    ws2.set_column(3, 3, 40)  # 등록상품명
+    ws2.freeze_panes(1, 0)
+
+    wb.close()
+    buf.seek(0)
+    return buf.getvalue()
+
+
+col_dl, _spacer = st.columns([1, 3])
+with col_dl:
+    from datetime import date as _date
+    _master_bytes = _build_master_xlsx()
+    st.download_button(
+        "📥 현재 마스터 파일 다운로드",
+        data=_master_bytes,
+        file_name=f"마스터-상품정보_{_date.today().isoformat()}.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        type="primary",
+        help="DB 현재 상태를 두 시트(WMS상품정보·쿠팡상품정보)로 받아 수정 후 아래에서 재업로드 가능",
+    )
 
 # =========================================================================
 # 📤 파일 업로드로 일괄 추가/수정/교체

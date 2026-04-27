@@ -517,7 +517,7 @@ if _is_new:
 
     # 업체 선택
     if not company_groups:
-        st.error("업체를 식별할 수 없습니다. 제품 마스터에 해당 업체의 상품이 등록되어 있는지 확인하세요.")
+        st.error("업체를 식별할 수 없습니다. 상품 정보 관리에 해당 업체의 상품이 등록되어 있는지 확인하세요.")
         st.stop()
 
     if len(company_groups) == 1:
@@ -602,7 +602,7 @@ if _is_new:
 
     st.success("4개 파일 업로드 완료")
 
-    # --- 3. 제품 마스터 로드 --------------------------------------------------
+    # --- 3. 상품 정보 관리 로드 --------------------------------------------------
     with get_session() as session:
         cp_masters = session.execute(
             select(CoupangProduct).where(CoupangProduct.company_name == selected_company)
@@ -699,7 +699,7 @@ if _is_new:
         )
 
     if not rows:
-        st.warning("표시할 SKU가 없습니다. '전체 표시'를 체크하거나 제품 마스터를 확인하세요.")
+        st.warning("표시할 SKU가 없습니다. '전체 표시'를 체크하거나 상품 정보 관리를 확인하세요.")
         st.stop()
 
     base_df = pd.DataFrame(rows)
@@ -846,7 +846,7 @@ if _is_new:
         ):
             st.caption(
                 "원인 후보: (1) WMS 파일에 해당 바코드 재고 없음 "
-                "(2) 제품 마스터의 parent_wms_barcode 가 실제 WMS 바코드와 다름 "
+                "(2) 상품 정보 관리의 parent_wms_barcode 가 실제 WMS 바코드와 다름 "
                 "(3) 모든 재고가 RELEASEAREA(출고대기) LOC 에 있음."
             )
             st.dataframe(pd.DataFrame(_missing_parents), use_container_width=True, hide_index=True)
@@ -1199,7 +1199,7 @@ if _is_new:
             f"수량을 줄이거나 출고를 분할 처리하세요."
         )
     if len(no_parent) > 0:
-        st.info(f"ℹ️ {len(no_parent)}개 SKU: 부모 WMS 바코드 매핑 없음. 제품 마스터에서 연결하세요.")
+        st.info(f"ℹ️ {len(no_parent)}개 SKU: 부모 WMS 바코드 매핑 없음. 상품 정보 관리에서 연결하세요.")
 
     # --- 9. 요약 & 액션 -------------------------------------------------------
     # 확정 수량 기반 — allocated_df(전체) + edited(필터 영역의 사용자 편집) 병합

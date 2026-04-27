@@ -2,7 +2,7 @@
 
 - 경고 임계값 조정 (현재 세션 전용, 실제 저장은 secrets.toml/DB에서)
 - DB 상태 확인
-- 제품 마스터 재이관 (템플릿 업로드)
+- 상품 정보 관리 재이관 (템플릿 업로드)
 """
 from __future__ import annotations
 
