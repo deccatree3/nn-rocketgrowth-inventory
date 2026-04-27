@@ -280,7 +280,7 @@ STATUS_LABELS = {"draft": "📝 임시저장", "verified": "✅ 발주확정", "
 _WIZARD_STEPS = [
     ("①", "", "기초자료 업로드"),
     ("②", "", "발주 수량 확정"),
-    ("③", "", "쿠팡 업로드 파일"),
+    ("③", "", "쿠팡 입고생성 파일 생성"),
     ("④", "", "검수 & 물류센터"),
     ("⑤", "", "결과 등록"),
 ]
@@ -1384,70 +1384,70 @@ else:
         st.stop()
 
     # === ③ 쿠팡 입고생성 업로드 파일 (계획 요약 포함) ===
-    _step3_label = "③ 쿠팡 입고생성 업로드 파일"
+    _step3_label = "③ 쿠팡 입고생성 파일 생성"
     if _mgmt_step >= 4:
         _step3_label += " ✅"
-    with st.expander(_step3_label, expanded=(_mgmt_status == "draft" and _mgmt_step == 3)):
-        _plan_df = pd.DataFrame([
-            {
-                "상품명": i.product_name,
-                "7일판매": i.sales_7d,
-                "30일판매": i.sales_30d,
-                "현재재고": i.current_total_stock,
-                "박스낱수": i.box_qty,
-                "추천입고": i.inbound_qty_suggested,
-                "확정입고": i.inbound_qty_final,
-                "확정박스": i.inbound_boxes,
-                "팔레트": i.pallet_no,
-            }
-            for i in _mgmt_items
-        ])
-        _total_qty = int(_plan_df["확정입고"].sum())
-        _total_boxes = int(_plan_df["확정박스"].sum())
-        # 팔레트 수: 저장값 우선, 없으면 박스수로 계산 (올림)
-        _psz = cfg.pallet_size_boxes
-        _pallet_cnt = _mgmt_plan.total_pallets or ((_total_boxes + _psz - 1) // _psz if _total_boxes else 0)
-        _pallet_disp = f"{_pallet_cnt}" + (" (꽉참)" if _total_boxes and _total_boxes % _psz == 0 else "")
-        _weight_kg = float(_mgmt_plan.total_weight_kg) if _mgmt_plan.total_weight_kg else 0.0
-        _mc1, _mc2, _mc3, _mc4, _mc5 = st.columns(5)
-        with _mc1:
-            st.metric("SKU", f"{len(_mgmt_items)}")
-        with _mc2:
-            st.metric("확정수량", f"{_total_qty:,}")
-        with _mc3:
-            st.metric("박스수", f"{_total_boxes:,}")
-        with _mc4:
-            st.metric("팔레트", _pallet_disp)
-        with _mc5:
-            st.metric("총중량 (kg)", f"{_weight_kg:,.1f}")
-        st.dataframe(_plan_df, use_container_width=True, hide_index=True, height=300)
+    st.subheader(_step3_label)
+    _plan_df = pd.DataFrame([
+        {
+            "상품명": i.product_name,
+            "7일판매": i.sales_7d,
+            "30일판매": i.sales_30d,
+            "현재재고": i.current_total_stock,
+            "박스낱수": i.box_qty,
+            "추천입고": i.inbound_qty_suggested,
+            "확정입고": i.inbound_qty_final,
+            "확정박스": i.inbound_boxes,
+            "팔레트": i.pallet_no,
+        }
+        for i in _mgmt_items
+    ])
+    _total_qty = int(_plan_df["확정입고"].sum())
+    _total_boxes = int(_plan_df["확정박스"].sum())
+    # 팔레트 수: 저장값 우선, 없으면 박스수로 계산 (올림)
+    _psz = cfg.pallet_size_boxes
+    _pallet_cnt = _mgmt_plan.total_pallets or ((_total_boxes + _psz - 1) // _psz if _total_boxes else 0)
+    _pallet_disp = f"{_pallet_cnt}" + (" (꽉참)" if _total_boxes and _total_boxes % _psz == 0 else "")
+    _weight_kg = float(_mgmt_plan.total_weight_kg) if _mgmt_plan.total_weight_kg else 0.0
+    _mc1, _mc2, _mc3, _mc4, _mc5 = st.columns(5)
+    with _mc1:
+        st.metric("SKU", f"{len(_mgmt_items)}")
+    with _mc2:
+        st.metric("확정수량", f"{_total_qty:,}")
+    with _mc3:
+        st.metric("박스수", f"{_total_boxes:,}")
+    with _mc4:
+        st.metric("팔레트", _pallet_disp)
+    with _mc5:
+        st.metric("총중량 (kg)", f"{_weight_kg:,.1f}")
+    st.dataframe(_plan_df, use_container_width=True, hide_index=True, height=300)
 
-        # 쿠팡 업로드 양식 재생성
-        if "template" in _mgmt_files and not _is_completed:
-            _tpl_name, _tpl_bytes = _mgmt_files["template"]
-            _re_export = []
-            for _it in _mgmt_items:
-                _cm4 = _mgmt_cp.get(_it.coupang_option_id)
-                _own_bc = _cm4.wms_barcode if _cm4 else None
-                _wp4 = _mgmt_wms.get(_own_bc) if _own_bc else None
-                _shl4 = _wp4.shelf_life_days if _wp4 else None
-                _exp4, _man4 = dates_from_batch(_it.wms_short_expiry, _shl4) if _it.wms_short_expiry else default_expiry_dates(_shl4)
-                _re_export.append(ExportItem(
-                    coupang_option_id=_it.coupang_option_id,
-                    inbound_qty=_it.inbound_qty_final,
-                    shelf_life_days=_shl4, expiry_date=_exp4,
-                    manufacture_date=_man4, wms_barcode=_own_bc,
-                    product_name=_it.product_name,
-                ))
-            try:
-                _re_xlsx, _re_miss = fill_coupang_template(io.BytesIO(_tpl_bytes), _re_export, delete_non_target=True)
-                st.download_button("📥 쿠팡 입고생성 업로드 파일 재생성", data=_re_xlsx,
-                    file_name=f"generated_excel_{date.today().isoformat()}.xlsx",
-                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
-                if _re_miss:
-                    st.warning(f"⚠️ {len(_re_miss)}건 누락 (쿠팡 양식에 없는 옵션ID)")
-            except Exception as e:
-                st.error(f"양식 생성 실패: {e}")
+    # 쿠팡 업로드 양식 재생성
+    if "template" in _mgmt_files and not _is_completed:
+        _tpl_name, _tpl_bytes = _mgmt_files["template"]
+        _re_export = []
+        for _it in _mgmt_items:
+            _cm4 = _mgmt_cp.get(_it.coupang_option_id)
+            _own_bc = _cm4.wms_barcode if _cm4 else None
+            _wp4 = _mgmt_wms.get(_own_bc) if _own_bc else None
+            _shl4 = _wp4.shelf_life_days if _wp4 else None
+            _exp4, _man4 = dates_from_batch(_it.wms_short_expiry, _shl4) if _it.wms_short_expiry else default_expiry_dates(_shl4)
+            _re_export.append(ExportItem(
+                coupang_option_id=_it.coupang_option_id,
+                inbound_qty=_it.inbound_qty_final,
+                shelf_life_days=_shl4, expiry_date=_exp4,
+                manufacture_date=_man4, wms_barcode=_own_bc,
+                product_name=_it.product_name,
+            ))
+        try:
+            _re_xlsx, _re_miss = fill_coupang_template(io.BytesIO(_tpl_bytes), _re_export, delete_non_target=True)
+            st.download_button("📥 쿠팡 입고생성 업로드 파일 재생성", data=_re_xlsx,
+                file_name=f"generated_excel_{date.today().isoformat()}.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+            if _re_miss:
+                st.warning(f"⚠️ {len(_re_miss)}건 누락 (쿠팡 양식에 없는 옵션ID)")
+        except Exception as e:
+            st.error(f"양식 생성 실패: {e}")
 
     # === SecondaryItem + PalletAssignment 구축 ===
     _sec_items: list[SecondaryItem] = []
@@ -1516,389 +1516,389 @@ else:
     _step4_label = "④ 검수 & 물류센터 전달 파일"
     if _mgmt_status in ("verified", "completed"):
         _step4_label += " ✅"
-    with st.expander(_step4_label, expanded=(_mgmt_status == "draft")):
-        _pdf_up = st.file_uploader(
-            "쿠팡 입고생성 결과물 파일(PDF 3개)를 업로드",
-            type=["pdf"], accept_multiple_files=True,
-            key=f"mgmt_pdf_{_selected_plan_id}",
-        )
+    st.subheader(_step4_label)
+    _pdf_up = st.file_uploader(
+        "쿠팡 입고생성 결과물 파일(PDF 3개)를 업로드",
+        type=["pdf"], accept_multiple_files=True,
+        key=f"mgmt_pdf_{_selected_plan_id}",
+    )
 
-        _label_pdf = _attach_pdf = _invoice_pdf = None
-        for f in (_pdf_up or []):
-            if "label" in f.name.lower() or "barcode" in f.name.lower():
-                _label_pdf = f
-            elif "물류부착" in f.name or "부착문서" in f.name:
-                _attach_pdf = f
-            elif "물류동봉" in f.name or "동봉문서" in f.name:
-                _invoice_pdf = f
+    _label_pdf = _attach_pdf = _invoice_pdf = None
+    for f in (_pdf_up or []):
+        if "label" in f.name.lower() or "barcode" in f.name.lower():
+            _label_pdf = f
+        elif "물류부착" in f.name or "부착문서" in f.name:
+            _attach_pdf = f
+        elif "물류동봉" in f.name or "동봉문서" in f.name:
+            _invoice_pdf = f
 
-        # DB fallback
-        if not _label_pdf and "label_pdf" in _mgmt_files:
-            _n, _b = _mgmt_files["label_pdf"]
-            _label_pdf = io.BytesIO(_b)
-            _label_pdf.name = _n
-        if not _attach_pdf and "attach_pdf" in _mgmt_files:
-            _n, _b = _mgmt_files["attach_pdf"]
-            _attach_pdf = io.BytesIO(_b)
-            _attach_pdf.name = _n
-        if not _invoice_pdf and "invoice_pdf" in _mgmt_files:
-            _n, _b = _mgmt_files["invoice_pdf"]
-            _invoice_pdf = io.BytesIO(_b)
-            _invoice_pdf.name = _n
+    # DB fallback
+    if not _label_pdf and "label_pdf" in _mgmt_files:
+        _n, _b = _mgmt_files["label_pdf"]
+        _label_pdf = io.BytesIO(_b)
+        _label_pdf.name = _n
+    if not _attach_pdf and "attach_pdf" in _mgmt_files:
+        _n, _b = _mgmt_files["attach_pdf"]
+        _attach_pdf = io.BytesIO(_b)
+        _attach_pdf.name = _n
+    if not _invoice_pdf and "invoice_pdf" in _mgmt_files:
+        _n, _b = _mgmt_files["invoice_pdf"]
+        _invoice_pdf = io.BytesIO(_b)
+        _invoice_pdf.name = _n
 
-        _mv_blob = _mgmt_plan.movement_template_blob
-        _mv_fname = _mgmt_plan.movement_template_filename
+    _mv_blob = _mgmt_plan.movement_template_blob
+    _mv_fname = _mgmt_plan.movement_template_filename
 
-        _vc = st.columns(4)
-        with _vc[0]:
-            st.write("✅ 라벨" if _label_pdf else "❌ 라벨")
-        with _vc[1]:
-            st.write("✅ 물류부착" if _attach_pdf else "❌ 물류부착")
-        with _vc[2]:
-            st.write("✅ 물류동봉" if _invoice_pdf else "⬜ 물류동봉")
-        with _vc[3]:
-            st.write("✅ 재고이동건(DB)" if _mv_blob else "⚠️ 없음")
+    _vc = st.columns(4)
+    with _vc[0]:
+        st.write("✅ 라벨" if _label_pdf else "❌ 라벨")
+    with _vc[1]:
+        st.write("✅ 물류부착" if _attach_pdf else "❌ 물류부착")
+    with _vc[2]:
+        st.write("✅ 물류동봉" if _invoice_pdf else "⬜ 물류동봉")
+    with _vc[3]:
+        st.write("✅ 재고이동건(DB)" if _mv_blob else "⚠️ 없음")
 
-        if _label_pdf and _attach_pdf:
-            _lb = _label_pdf.getvalue() if hasattr(_label_pdf, 'getvalue') else _label_pdf.read()
-            _ab = _attach_pdf.getvalue() if hasattr(_attach_pdf, 'getvalue') else _attach_pdf.read()
-            _lname = getattr(_label_pdf, 'name', 'label.pdf')
-            _aname = getattr(_attach_pdf, 'name', 'attach.pdf')
+    if _label_pdf and _attach_pdf:
+        _lb = _label_pdf.getvalue() if hasattr(_label_pdf, 'getvalue') else _label_pdf.read()
+        _ab = _attach_pdf.getvalue() if hasattr(_attach_pdf, 'getvalue') else _attach_pdf.read()
+        _lname = getattr(_label_pdf, 'name', 'label.pdf')
+        _aname = getattr(_attach_pdf, 'name', 'attach.pdf')
 
-            # PDF 저장
-            _new_pdfs: dict[str, tuple[str, bytes]] = {}
-            if "label_pdf" not in _mgmt_files:
-                _new_pdfs["label_pdf"] = (_lname, _lb)
-            if "attach_pdf" not in _mgmt_files:
-                _new_pdfs["attach_pdf"] = (_aname, _ab)
-            _ib = None
-            if _invoice_pdf:
-                _ib = _invoice_pdf.getvalue() if hasattr(_invoice_pdf, 'getvalue') else _invoice_pdf.read()
-                _iname = getattr(_invoice_pdf, 'name', 'invoice.pdf')
-                if "invoice_pdf" not in _mgmt_files:
-                    _new_pdfs["invoice_pdf"] = (_iname, _ib)
-            if _new_pdfs:
-                _save_plan_files(_selected_plan_id, _new_pdfs)
+        # PDF 저장
+        _new_pdfs: dict[str, tuple[str, bytes]] = {}
+        if "label_pdf" not in _mgmt_files:
+            _new_pdfs["label_pdf"] = (_lname, _lb)
+        if "attach_pdf" not in _mgmt_files:
+            _new_pdfs["attach_pdf"] = (_aname, _ab)
+        _ib = None
+        if _invoice_pdf:
+            _ib = _invoice_pdf.getvalue() if hasattr(_invoice_pdf, 'getvalue') else _invoice_pdf.read()
+            _iname = getattr(_invoice_pdf, 'name', 'invoice.pdf')
+            if "invoice_pdf" not in _mgmt_files:
+                _new_pdfs["invoice_pdf"] = (_iname, _ib)
+        if _new_pdfs:
+            _save_plan_files(_selected_plan_id, _new_pdfs)
 
-            _labels = parse_barcode_labels(_lb)
-            _attachment = parse_attachment_doc(_ab)
-            _invoice = parse_invoice_doc(_ib) if _ib else None
+        _labels = parse_barcode_labels(_lb)
+        _attachment = parse_attachment_doc(_ab)
+        _invoice = parse_invoice_doc(_ib) if _ib else None
 
-            # PlannedSku
-            _planned: list[PlannedSku] = []
-            for _it in _mgmt_items:
-                _cm6 = _mgmt_cp.get(_it.coupang_option_id)
-                _own6 = _cm6.wms_barcode if _cm6 else None
-                _cbc6 = _cm6.coupang_barcode if _cm6 else None
-                _pbc6, _uq6 = _resolve_parent_barcode(_cm6, _mgmt_wms) if _cm6 else (None, 1)
-                _wp6 = _mgmt_wms.get(_own6) if _own6 else None
-                _pwp6 = _mgmt_wms.get(_pbc6) if _pbc6 else None
-                _shl6 = (_wp6.shelf_life_days if _wp6 else None) or (_pwp6.shelf_life_days if _pwp6 else None)
-                _bq6 = _it.box_qty or 1
-                _boxes6 = (_it.inbound_qty_final or 0) // max(_bq6, 1)
-                _emfg6 = None
-                if _it.wms_short_expiry and _shl6:
-                    _emfg6 = _it.wms_short_expiry - timedelta(days=int(_shl6) - 1)
-                _planned.append(PlannedSku(
-                    coupang_option_id=_it.coupang_option_id,
-                    sku_id=_cm6.sku_id if _cm6 else None,
-                    product_name=_cm6.product_name if _cm6 else _it.product_name,
-                    option_name=_cm6.option_name if _cm6 else _it.option_name,
-                    own_wms_barcode=_own6,
-                    parent_wms_barcode=_pbc6, unit_qty=_uq6,
-                    coupang_barcode=_cbc6,
-                    inbound_qty=_it.inbound_qty_final or 0,
-                    box_qty=_bq6, boxes=_boxes6,
-                    expects_label=False,
-                    expected_attached_barcode=None,
-                    expected_expiry=_it.wms_short_expiry,
-                    expected_manufacture=_emfg6,
-                ))
+        # PlannedSku
+        _planned: list[PlannedSku] = []
+        for _it in _mgmt_items:
+            _cm6 = _mgmt_cp.get(_it.coupang_option_id)
+            _own6 = _cm6.wms_barcode if _cm6 else None
+            _cbc6 = _cm6.coupang_barcode if _cm6 else None
+            _pbc6, _uq6 = _resolve_parent_barcode(_cm6, _mgmt_wms) if _cm6 else (None, 1)
+            _wp6 = _mgmt_wms.get(_own6) if _own6 else None
+            _pwp6 = _mgmt_wms.get(_pbc6) if _pbc6 else None
+            _shl6 = (_wp6.shelf_life_days if _wp6 else None) or (_pwp6.shelf_life_days if _pwp6 else None)
+            _bq6 = _it.box_qty or 1
+            _boxes6 = (_it.inbound_qty_final or 0) // max(_bq6, 1)
+            _emfg6 = None
+            if _it.wms_short_expiry and _shl6:
+                _emfg6 = _it.wms_short_expiry - timedelta(days=int(_shl6) - 1)
+            _planned.append(PlannedSku(
+                coupang_option_id=_it.coupang_option_id,
+                sku_id=_cm6.sku_id if _cm6 else None,
+                product_name=_cm6.product_name if _cm6 else _it.product_name,
+                option_name=_cm6.option_name if _cm6 else _it.option_name,
+                own_wms_barcode=_own6,
+                parent_wms_barcode=_pbc6, unit_qty=_uq6,
+                coupang_barcode=_cbc6,
+                inbound_qty=_it.inbound_qty_final or 0,
+                box_qty=_bq6, boxes=_boxes6,
+                expects_label=False,
+                expected_attached_barcode=None,
+                expected_expiry=_it.wms_short_expiry,
+                expected_manufacture=_emfg6,
+            ))
 
-            # 중복 체크
-            _dup = False
-            if _attachment.milkrun_id:
-                with get_session() as _ds:
-                    _dups = _ds.execute(select(CoupangResultLog).where(
-                        CoupangResultLog.milkrun_id == _attachment.milkrun_id,
-                        CoupangResultLog.company_name == _mgmt_company,
-                    )).scalars().all()
-                    _existing_ids = {d.plan_id for d in _dups}
-                    if _dups and _selected_plan_id not in _existing_ids:
-                        _dup = True
-                        st.warning(f"⚠️ 밀크런 ID {_attachment.milkrun_id} 는 이미 처리된 이력이 있습니다.")
+        # 중복 체크
+        _dup = False
+        if _attachment.milkrun_id:
+            with get_session() as _ds:
+                _dups = _ds.execute(select(CoupangResultLog).where(
+                    CoupangResultLog.milkrun_id == _attachment.milkrun_id,
+                    CoupangResultLog.company_name == _mgmt_company,
+                )).scalars().all()
+                _existing_ids = {d.plan_id for d in _dups}
+                if _dups and _selected_plan_id not in _existing_ids:
+                    _dup = True
+                    st.warning(f"⚠️ 밀크런 ID {_attachment.milkrun_id} 는 이미 처리된 이력이 있습니다.")
 
-            # 검수: 재고이동건 파일이 있으면 번들 합계로 자체 검증 (파일 단순 존재 체크)
-            _mvt_total = None
-            if _mv_blob:
-                _mvt_total = sum(
-                    s.inbound_qty for s in _planned
-                    if s.unit_qty and s.unit_qty >= 2 and s.inbound_qty > 0
-                )
-            _report = verify(
-                planned_skus=_planned,
-                labels=_labels,
-                attachment=_attachment,
-                pallet_assignment=_pa,
-                duplicate_check=_dup,
-                movement_inbound_total=_mvt_total,
-                invoice=_invoice,
+        # 검수: 재고이동건 파일이 있으면 번들 합계로 자체 검증 (파일 단순 존재 체크)
+        _mvt_total = None
+        if _mv_blob:
+            _mvt_total = sum(
+                s.inbound_qty for s in _planned
+                if s.unit_qty and s.unit_qty >= 2 and s.inbound_qty > 0
             )
-            if _report.overall == "ok":
-                st.success("✅ 검수 통과")
-            elif _report.overall == "warning":
-                st.warning("⚠️ 일부 항목 확인 필요")
-            else:
-                st.error("❌ 검수 실패")
-
-            _icon = {"ok": "✅", "warning": "⚠️", "fail": "❌"}
-            for _ck in _report.checks:
-                _lbl2 = f"{_icon.get(_ck.status, '•')} **{_ck.name}**"
-                if _ck.expected is not None and _ck.actual is not None:
-                    _lbl2 += f" — {_ck.actual} (예상 {_ck.expected})"
-                elif _ck.actual is not None:
-                    _lbl2 += f" — {_ck.actual}"
-                st.markdown(_lbl2)
-                if _ck.detail:
-                    st.caption(_ck.detail)
-                if _ck.items:
-                    with st.expander(f"세부 {len(_ck.items)}건"):
-                        st.dataframe(pd.DataFrame(_ck.items), use_container_width=True, hide_index=True)
-
-            # 물류센터 전달 파일
-            st.markdown("#### 물류센터 전달 파일")
-            _order_base = (_invoice.order_id if _invoice and _invoice.order_id else _attachment.milkrun_id) or ""
-            _fc = _attachment.fc_name or _mgmt_plan.fc_name or "FC"
-            _arr = _attachment.arrival_date or _mgmt_plan.arrival_date or date.today()
-            _yymmdd = _arr.strftime("%y%m%d")
-            _datesuf = _arr.strftime("%Y%m%d")
-            _yyyymm = _arr.strftime("%Y_%m월")
-
-            _dc = st.columns(3)
-            try:
-                _cons = build_consolidation_list(_sec_items, _pa, _fc, _arr, cfg.default_company_name,
-                    _invoice.order_id if _invoice and _invoice.order_id else _attachment.milkrun_id)
-                with _dc[0]:
-                    st.download_button("📥 취합리스트", data=_cons,
-                        file_name=f"{cfg.default_company_name}_밀크런_취합리스트_{_yymmdd}_{_fc}.xlsx",
-                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                        use_container_width=True, type="primary")
-            except Exception as e:
-                with _dc[0]:
-                    st.error(str(e))
-            try:
-                _pal = build_pallet_loading_list(_sec_items, _pa, _fc, _arr,
-                    milkrun_request_id=_order_base, pallet_size=cfg.pallet_size_boxes)
-                with _dc[1]:
-                    st.download_button("📥 팔레트적재리스트", data=_pal,
-                        file_name=f"밀크런_물류부착문서2 (팔레트적재리스트)_{_fc}_{_datesuf}.xlsx",
-                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                        use_container_width=True, type="primary")
-            except Exception as e:
-                with _dc[1]:
-                    st.error(str(e))
-            if _mv_blob:
-                try:
-                    _mv_out = update_inventory_movement(bytes(_mv_blob), _sec_items, _arr, _fc, cfg.default_company_name)
-                    with _dc[2]:
-                        st.download_button("📥 재고이동건", data=_mv_out,
-                            file_name=_mv_fname or f"쿠팡 재고이동건_{_yyyymm}.xlsx",
-                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                            use_container_width=True, type="primary")
-                except Exception as e:
-                    with _dc[2]:
-                        st.error(str(e))
-
-            # PDF 리네임 (물류센터 전달 파일에 포함)
-            _dpc = st.columns(3)
-            if _ib:
-                with _dpc[0]:
-                    st.download_button("📥 물류동봉문서(거래명세서)", data=_ib,
-                        file_name=f"밀크런_물류동봉문서(거래명세서)_{_fc}_{_datesuf}.pdf", mime="application/pdf",
-                        use_container_width=True, type="primary")
-            with _dpc[1]:
-                st.download_button("📥 제품 바코드라벨", data=_lb,
-                    file_name=f"제품 바코드라벨_{_fc}_{_datesuf}.pdf", mime="application/pdf",
-                    use_container_width=True, type="primary")
-            with _dpc[2]:
-                st.download_button("📥 물류부착문서(팔레트부착)", data=_ab,
-                    file_name=f"밀크런_물류부착문서1 (팔레트부착문서)_{_fc}_{_datesuf}.pdf", mime="application/pdf",
-                    use_container_width=True, type="primary")
-
-            # 이지어드민 재고차감 파일
-            st.markdown("#### 이지어드민 재고차감 파일")
-            _ea = st.columns(3)
-            try:
-                _ord = build_order_form(_sec_items, _fc, str(_order_base).strip(), pallet_assignment=_pa)
-                with _ea[0]:
-                    st.download_button("📥 발주서양식", data=_ord,
-                        file_name=f"밀크런재고차감_로켓그로스({cfg.default_company_name}커머스)발주서양식_{_datesuf}.xlsx",
-                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                        use_container_width=True, type="primary")
-            except Exception as e:
-                with _ea[0]:
-                    st.error(str(e))
-
-            # 발주 확정
-            if _mgmt_status == "draft":
-                st.divider()
-                if st.button("✅ 검수 완료 — 발주 확정", type="primary", use_container_width=True, disabled=_dup, key="mgmt_confirm"):
-                    try:
-                        with get_session() as _s4:
-                            _po = _s4.get(InboundPlan, _selected_plan_id)
-                            _po.status = "verified"
-                            _po.fc_name = _fc
-                            _po.arrival_date = _arr
-                            _po.milkrun_id = _attachment.milkrun_id
-                            _po.total_pallets = _pa.pallet_count
-                            _po.verified_at = datetime.now(timezone.utc)
-                            _po.confirmed_at = datetime.now(timezone.utc)
-                            _ibo = {it.coupang_option_id: it for it in _mgmt_items}
-                            for _pi2, _pal2 in enumerate(_pa.pallets, start=1):
-                                for _en in _pal2:
-                                    _dbi = _ibo.get(_en.key)
-                                    if _dbi:
-                                        _sk = next((s for s in _planned if s.coupang_option_id == _en.key), None)
-                                        if _sk:
-                                            _cm7 = _mgmt_cp.get(_sk.coupang_option_id)
-                                            _bc7 = (_cm7.coupang_barcode if _cm7 and _cm7.coupang_barcode and _cm7.coupang_barcode.startswith("S0") else _sk.own_wms_barcode)
-                                            _bt7 = "쿠팡바코드" if (_cm7 and _cm7.coupang_barcode and _cm7.coupang_barcode.startswith("S0")) else "88코드"
-                                            _dbi.pallet_no = _pi2
-                                            _dbi.barcode_attached = _bc7
-                                            _dbi.barcode_type = _bt7
-                            _tb = sum(s.boxes for s in _planned)
-                            _s4.add(CoupangResultLog(
-                                company_name=_mgmt_company,
-                                milkrun_id=_attachment.milkrun_id or "",
-                                fc_name=_fc, arrival_date=_arr,
-                                total_pallets=_pa.pallet_count, total_boxes=_tb,
-                                total_skus=len([s for s in _planned if s.boxes > 0]),
-                                plan_id=_selected_plan_id,
-                                label_filename=_lname, attachment_filename=_aname,
-                            ))
-                            _s4.commit()
-                        st.success(f"✅ 발주 #{_selected_plan_id} 확정 완료")
-                        st.cache_data.clear()
-                    except Exception as e:
-                        st.error(f"확정 실패: {e}")
+        _report = verify(
+            planned_skus=_planned,
+            labels=_labels,
+            attachment=_attachment,
+            pallet_assignment=_pa,
+            duplicate_check=_dup,
+            movement_inbound_total=_mvt_total,
+            invoice=_invoice,
+        )
+        if _report.overall == "ok":
+            st.success("✅ 검수 통과")
+        elif _report.overall == "warning":
+            st.warning("⚠️ 일부 항목 확인 필요")
         else:
-            st.info("라벨 PDF와 물류부착문서 PDF를 업로드하세요.")
+            st.error("❌ 검수 실패")
+
+        _icon = {"ok": "✅", "warning": "⚠️", "fail": "❌"}
+        for _ck in _report.checks:
+            _lbl2 = f"{_icon.get(_ck.status, '•')} **{_ck.name}**"
+            if _ck.expected is not None and _ck.actual is not None:
+                _lbl2 += f" — {_ck.actual} (예상 {_ck.expected})"
+            elif _ck.actual is not None:
+                _lbl2 += f" — {_ck.actual}"
+            st.markdown(_lbl2)
+            if _ck.detail:
+                st.caption(_ck.detail)
+            if _ck.items:
+                with st.expander(f"세부 {len(_ck.items)}건"):
+                    st.dataframe(pd.DataFrame(_ck.items), use_container_width=True, hide_index=True)
+
+        # 물류센터 전달 파일
+        st.markdown("#### 물류센터 전달 파일")
+        _order_base = (_invoice.order_id if _invoice and _invoice.order_id else _attachment.milkrun_id) or ""
+        _fc = _attachment.fc_name or _mgmt_plan.fc_name or "FC"
+        _arr = _attachment.arrival_date or _mgmt_plan.arrival_date or date.today()
+        _yymmdd = _arr.strftime("%y%m%d")
+        _datesuf = _arr.strftime("%Y%m%d")
+        _yyyymm = _arr.strftime("%Y_%m월")
+
+        _dc = st.columns(3)
+        try:
+            _cons = build_consolidation_list(_sec_items, _pa, _fc, _arr, cfg.default_company_name,
+                _invoice.order_id if _invoice and _invoice.order_id else _attachment.milkrun_id)
+            with _dc[0]:
+                st.download_button("📥 취합리스트", data=_cons,
+                    file_name=f"{cfg.default_company_name}_밀크런_취합리스트_{_yymmdd}_{_fc}.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    use_container_width=True, type="primary")
+        except Exception as e:
+            with _dc[0]:
+                st.error(str(e))
+        try:
+            _pal = build_pallet_loading_list(_sec_items, _pa, _fc, _arr,
+                milkrun_request_id=_order_base, pallet_size=cfg.pallet_size_boxes)
+            with _dc[1]:
+                st.download_button("📥 팔레트적재리스트", data=_pal,
+                    file_name=f"밀크런_물류부착문서2 (팔레트적재리스트)_{_fc}_{_datesuf}.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    use_container_width=True, type="primary")
+        except Exception as e:
+            with _dc[1]:
+                st.error(str(e))
+        if _mv_blob:
+            try:
+                _mv_out = update_inventory_movement(bytes(_mv_blob), _sec_items, _arr, _fc, cfg.default_company_name)
+                with _dc[2]:
+                    st.download_button("📥 재고이동건", data=_mv_out,
+                        file_name=_mv_fname or f"쿠팡 재고이동건_{_yyyymm}.xlsx",
+                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                        use_container_width=True, type="primary")
+            except Exception as e:
+                with _dc[2]:
+                    st.error(str(e))
+
+        # PDF 리네임 (물류센터 전달 파일에 포함)
+        _dpc = st.columns(3)
+        if _ib:
+            with _dpc[0]:
+                st.download_button("📥 물류동봉문서(거래명세서)", data=_ib,
+                    file_name=f"밀크런_물류동봉문서(거래명세서)_{_fc}_{_datesuf}.pdf", mime="application/pdf",
+                    use_container_width=True, type="primary")
+        with _dpc[1]:
+            st.download_button("📥 제품 바코드라벨", data=_lb,
+                file_name=f"제품 바코드라벨_{_fc}_{_datesuf}.pdf", mime="application/pdf",
+                use_container_width=True, type="primary")
+        with _dpc[2]:
+            st.download_button("📥 물류부착문서(팔레트부착)", data=_ab,
+                file_name=f"밀크런_물류부착문서1 (팔레트부착문서)_{_fc}_{_datesuf}.pdf", mime="application/pdf",
+                use_container_width=True, type="primary")
+
+        # 이지어드민 재고차감 파일
+        st.markdown("#### 이지어드민 재고차감 파일")
+        _ea = st.columns(3)
+        try:
+            _ord = build_order_form(_sec_items, _fc, str(_order_base).strip(), pallet_assignment=_pa)
+            with _ea[0]:
+                st.download_button("📥 발주서양식", data=_ord,
+                    file_name=f"밀크런재고차감_로켓그로스({cfg.default_company_name}커머스)발주서양식_{_datesuf}.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    use_container_width=True, type="primary")
+        except Exception as e:
+            with _ea[0]:
+                st.error(str(e))
+
+        # 발주 확정
+        if _mgmt_status == "draft":
+            st.divider()
+            if st.button("✅ 검수 완료 — 발주 확정", type="primary", use_container_width=True, disabled=_dup, key="mgmt_confirm"):
+                try:
+                    with get_session() as _s4:
+                        _po = _s4.get(InboundPlan, _selected_plan_id)
+                        _po.status = "verified"
+                        _po.fc_name = _fc
+                        _po.arrival_date = _arr
+                        _po.milkrun_id = _attachment.milkrun_id
+                        _po.total_pallets = _pa.pallet_count
+                        _po.verified_at = datetime.now(timezone.utc)
+                        _po.confirmed_at = datetime.now(timezone.utc)
+                        _ibo = {it.coupang_option_id: it for it in _mgmt_items}
+                        for _pi2, _pal2 in enumerate(_pa.pallets, start=1):
+                            for _en in _pal2:
+                                _dbi = _ibo.get(_en.key)
+                                if _dbi:
+                                    _sk = next((s for s in _planned if s.coupang_option_id == _en.key), None)
+                                    if _sk:
+                                        _cm7 = _mgmt_cp.get(_sk.coupang_option_id)
+                                        _bc7 = (_cm7.coupang_barcode if _cm7 and _cm7.coupang_barcode and _cm7.coupang_barcode.startswith("S0") else _sk.own_wms_barcode)
+                                        _bt7 = "쿠팡바코드" if (_cm7 and _cm7.coupang_barcode and _cm7.coupang_barcode.startswith("S0")) else "88코드"
+                                        _dbi.pallet_no = _pi2
+                                        _dbi.barcode_attached = _bc7
+                                        _dbi.barcode_type = _bt7
+                        _tb = sum(s.boxes for s in _planned)
+                        _s4.add(CoupangResultLog(
+                            company_name=_mgmt_company,
+                            milkrun_id=_attachment.milkrun_id or "",
+                            fc_name=_fc, arrival_date=_arr,
+                            total_pallets=_pa.pallet_count, total_boxes=_tb,
+                            total_skus=len([s for s in _planned if s.boxes > 0]),
+                            plan_id=_selected_plan_id,
+                            label_filename=_lname, attachment_filename=_aname,
+                        ))
+                        _s4.commit()
+                    st.success(f"✅ 발주 #{_selected_plan_id} 확정 완료")
+                    st.cache_data.clear()
+                except Exception as e:
+                    st.error(f"확정 실패: {e}")
+    else:
+        st.info("라벨 PDF와 물류부착문서 PDF를 업로드하세요.")
 
     # === ⑤ 재고차감 / 마무리 (3차 결과물) ===
     if _mgmt_status in ("verified", "completed") and _label_pdf and _attach_pdf:
         _step5_label = "⑤ 재고차감 / 마무리 (이지어드민 재고차감 파일)"
         if _mgmt_status == "completed":
             _step5_label += " ✅"
-        with st.expander(_step5_label, expanded=(_mgmt_status == "verified")):
-            _order_base3 = (_invoice.order_id if _invoice and _invoice.order_id else None) or (_mgmt_plan.milkrun_id or "")
+        st.subheader(_step5_label)
+        _order_base3 = (_invoice.order_id if _invoice and _invoice.order_id else None) or (_mgmt_plan.milkrun_id or "")
 
-            _os_uploaded = "order_search" in _mgmt_files
-            _os_guide_html = (
-                '<table style="border-collapse: collapse; width: 100%;">'
-                '<thead><tr>'
-                '<th style="text-align:left;">구분</th>'
-                '<th style="text-align:left;">취합 경로</th>'
-                '<th style="width:90px; text-align:center; white-space:nowrap;">취합여부</th>'
-                '</tr></thead>'
-                '<tbody><tr>'
-                '<td>확장주문검색 파일</td>'
-                '<td>이지어드민 &gt; 주문관리 &gt; 확장주문검색2 &gt; 판매처 - 로켓그로스(서현커머스) &gt; 다운로드 포맷 [내뉴]발주서 &gt; 다운로드</td>'
-                f'<td style="width:90px; text-align:center; white-space:nowrap;">{"✅" if _os_uploaded else ""}</td>'
-                '</tr></tbody>'
-                '</table>'
+        _os_uploaded = "order_search" in _mgmt_files
+        _os_guide_html = (
+            '<table style="border-collapse: collapse; width: 100%;">'
+            '<thead><tr>'
+            '<th style="text-align:left;">구분</th>'
+            '<th style="text-align:left;">취합 경로</th>'
+            '<th style="width:90px; text-align:center; white-space:nowrap;">취합여부</th>'
+            '</tr></thead>'
+            '<tbody><tr>'
+            '<td>확장주문검색 파일</td>'
+            '<td>이지어드민 &gt; 주문관리 &gt; 확장주문검색2 &gt; 판매처 - 로켓그로스(서현커머스) &gt; 다운로드 포맷 [내뉴]발주서 &gt; 다운로드</td>'
+            f'<td style="width:90px; text-align:center; white-space:nowrap;">{"✅" if _os_uploaded else ""}</td>'
+            '</tr></tbody>'
+            '</table>'
+        )
+        _os_guide_ph = st.empty()
+        _os_guide_ph.markdown(_os_guide_html, unsafe_allow_html=True)
+
+        _os_file = st.file_uploader(
+            "확장주문검색 파일 업로드",
+            type=["xls", "xlsx"],
+            key=f"mgmt_os_{_selected_plan_id}",
+            label_visibility="collapsed",
+        )
+        if not _os_file and "order_search" in _mgmt_files:
+            _osn, _osb = _mgmt_files["order_search"]
+            _os_file = io.BytesIO(_osb)
+            _os_file.name = _osn
+
+        if _os_file is not None:
+            _os_bytes = _os_file.getvalue() if hasattr(_os_file, 'getvalue') else _os_file.read()
+            _os_name = getattr(_os_file, 'name', 'order_search.xls')
+            if "order_search" not in _mgmt_files:
+                _save_plan_files(_selected_plan_id, {"order_search": (_os_name, _os_bytes)})
+            # 방금 업로드된 경우도 가이드 테이블에 ✅ 반영
+            _os_uploaded = True
+            _os_guide_ph.markdown(
+                _os_guide_html.replace(
+                    'style="width:90px; text-align:center; white-space:nowrap;"></td>',
+                    'style="width:90px; text-align:center; white-space:nowrap;">✅</td>',
+                ),
+                unsafe_allow_html=True,
             )
-            _os_guide_ph = st.empty()
-            _os_guide_ph.markdown(_os_guide_html, unsafe_allow_html=True)
 
-            _os_file = st.file_uploader(
-                "확장주문검색 파일 업로드",
-                type=["xls", "xlsx"],
-                key=f"mgmt_os_{_selected_plan_id}",
-                label_visibility="collapsed",
-            )
-            if not _os_file and "order_search" in _mgmt_files:
-                _osn, _osb = _mgmt_files["order_search"]
-                _os_file = io.BytesIO(_osb)
-                _os_file.name = _osn
+            try:
+                _os_rows = parse_order_search_file(_os_bytes)
+            except Exception as e:
+                st.error(f"파일 파싱 실패: {e}")
+                _os_rows = []
 
-            if _os_file is not None:
-                _os_bytes = _os_file.getvalue() if hasattr(_os_file, 'getvalue') else _os_file.read()
-                _os_name = getattr(_os_file, 'name', 'order_search.xls')
-                if "order_search" not in _mgmt_files:
-                    _save_plan_files(_selected_plan_id, {"order_search": (_os_name, _os_bytes)})
-                # 방금 업로드된 경우도 가이드 테이블에 ✅ 반영
-                _os_uploaded = True
-                _os_guide_ph.markdown(
-                    _os_guide_html.replace(
-                        'style="width:90px; text-align:center; white-space:nowrap;"></td>',
-                        'style="width:90px; text-align:center; white-space:nowrap;">✅</td>',
-                    ),
-                    unsafe_allow_html=True,
+            if _os_rows:
+                st.info(f"파싱 완료: {len(_os_rows)}건")
+                _inv_qty_by_sku = None
+                if _invoice and _invoice.items:
+                    _inv_qty_by_sku = {str(x.sku_id): int(x.confirmed_qty) for x in _invoice.items if x.sku_id}
+                _chk = validate_order_search(
+                    _os_rows, _sec_items, str(_order_base3).strip(),
+                    pallet_assignment=_pa, invoice_qty_by_sku=_inv_qty_by_sku,
                 )
+                _basis_label = "쿠팡결과(거래명세서)" if _inv_qty_by_sku else "발주확정 계획"
+                if _chk.status == "ok":
+                    st.success(f"✅ 검수 통과 — {_basis_label} 기준 일치")
+                else:
+                    st.error(f"❌ 검수 실패 — {_basis_label} 기준 ({len(_chk.issues)}건 이슈)")
+                    for _iss in _chk.issues:
+                        st.markdown(f"- {_iss}")
+                if _chk.matched_pairs:
+                    with st.expander(f"매칭 상세 {len(_chk.matched_pairs)}건"):
+                        st.dataframe(pd.DataFrame(_chk.matched_pairs),
+                            use_container_width=True, hide_index=True)
 
+                _dsuf3 = (_mgmt_plan.arrival_date or date.today()).strftime("%Y%m%d")
+                _tc = st.columns(2)
                 try:
-                    _os_rows = parse_order_search_file(_os_bytes)
+                    _bulk = build_shipping_bulk_form(_os_rows)
+                    with _tc[0]:
+                        st.download_button("📥 배송일괄처리양식", data=_bulk,
+                            file_name=f"밀크런재고차감_배송일괄처리양식_{_dsuf3}.xlsx",
+                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                            use_container_width=True, type="primary",
+                            disabled=(_chk.status != "ok"))
                 except Exception as e:
-                    st.error(f"파일 파싱 실패: {e}")
-                    _os_rows = []
+                    with _tc[0]:
+                        st.error(str(e))
+                try:
+                    _inv3 = build_invoice_upload_form(_os_rows)
+                    with _tc[1]:
+                        st.download_button("📥 송장업로드양식", data=_inv3,
+                            file_name=f"밀크런재고차감_송장업로드양식_{_dsuf3}.xlsx",
+                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                            use_container_width=True, type="primary",
+                            disabled=(_chk.status != "ok"))
+                except Exception as e:
+                    with _tc[1]:
+                        st.error(str(e))
 
-                if _os_rows:
-                    st.info(f"파싱 완료: {len(_os_rows)}건")
-                    _inv_qty_by_sku = None
-                    if _invoice and _invoice.items:
-                        _inv_qty_by_sku = {str(x.sku_id): int(x.confirmed_qty) for x in _invoice.items if x.sku_id}
-                    _chk = validate_order_search(
-                        _os_rows, _sec_items, str(_order_base3).strip(),
-                        pallet_assignment=_pa, invoice_qty_by_sku=_inv_qty_by_sku,
-                    )
-                    _basis_label = "쿠팡결과(거래명세서)" if _inv_qty_by_sku else "발주확정 계획"
-                    if _chk.status == "ok":
-                        st.success(f"✅ 검수 통과 — {_basis_label} 기준 일치")
-                    else:
-                        st.error(f"❌ 검수 실패 — {_basis_label} 기준 ({len(_chk.issues)}건 이슈)")
-                        for _iss in _chk.issues:
-                            st.markdown(f"- {_iss}")
-                    if _chk.matched_pairs:
-                        with st.expander(f"매칭 상세 {len(_chk.matched_pairs)}건"):
-                            st.dataframe(pd.DataFrame(_chk.matched_pairs),
-                                use_container_width=True, hide_index=True)
-
-                    _dsuf3 = (_mgmt_plan.arrival_date or date.today()).strftime("%Y%m%d")
-                    _tc = st.columns(2)
-                    try:
-                        _bulk = build_shipping_bulk_form(_os_rows)
-                        with _tc[0]:
-                            st.download_button("📥 배송일괄처리양식", data=_bulk,
-                                file_name=f"밀크런재고차감_배송일괄처리양식_{_dsuf3}.xlsx",
-                                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                                use_container_width=True, type="primary",
-                                disabled=(_chk.status != "ok"))
-                    except Exception as e:
-                        with _tc[0]:
-                            st.error(str(e))
-                    try:
-                        _inv3 = build_invoice_upload_form(_os_rows)
-                        with _tc[1]:
-                            st.download_button("📥 송장업로드양식", data=_inv3,
-                                file_name=f"밀크런재고차감_송장업로드양식_{_dsuf3}.xlsx",
-                                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                                use_container_width=True, type="primary",
-                                disabled=(_chk.status != "ok"))
-                    except Exception as e:
-                        with _tc[1]:
-                            st.error(str(e))
-
-                    if _mgmt_status != "completed" and _chk.status == "ok":
-                        if st.button("✅ 재고차감 완료", type="primary", use_container_width=True,
-                                     key=f"mgmt_deduct_{_selected_plan_id}"):
-                            try:
-                                with get_session() as _s5:
-                                    _po2 = _s5.get(InboundPlan, _selected_plan_id)
-                                    _po2.status = "completed"
-                                    _s5.commit()
-                                st.success(f"✅ 발주 #{_selected_plan_id} 재고차감 완료")
-                                st.cache_data.clear()
-                            except Exception as e:
-                                st.error(f"상태 업데이트 실패: {e}")
+                if _mgmt_status != "completed" and _chk.status == "ok":
+                    if st.button("✅ 재고차감 완료", type="primary", use_container_width=True,
+                                 key=f"mgmt_deduct_{_selected_plan_id}"):
+                        try:
+                            with get_session() as _s5:
+                                _po2 = _s5.get(InboundPlan, _selected_plan_id)
+                                _po2.status = "completed"
+                                _s5.commit()
+                            st.success(f"✅ 발주 #{_selected_plan_id} 재고차감 완료")
+                            st.cache_data.clear()
+                        except Exception as e:
+                            st.error(f"상태 업데이트 실패: {e}")
     elif _mgmt_status == "draft":
         st.caption("ℹ️ 검수 PDF 업로드 후 발주 확정하면 재고차감 단계가 활성화됩니다.")
