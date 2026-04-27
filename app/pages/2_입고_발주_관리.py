@@ -58,7 +58,8 @@ from lib.secondary_export import (
     update_inventory_movement,
     validate_order_search,
 )
-from lib.verification import PlannedSku, VerificationReport, verify
+from lib.verification import PlannedSku, VerificationReport, derive_attached_barcode, is_label_expected, verify
+from lib.coupang_result import name_similarity
 from lib.outbound import PoolAllocationItem, allocate_parent_pool
 from lib.pallet import PalletItem, optimize_to_pallet
 from lib.planning import URGENCY_ICONS, PlanInput, PlanParams, compute_plan, urgency_badge
@@ -1706,19 +1707,103 @@ else:
         else:
             st.error("❌ 검수 실패")
 
-        _icon = {"ok": "✅", "warning": "⚠️", "fail": "❌"}
-        for _ck in _report.checks:
-            _lbl2 = f"{_icon.get(_ck.status, '•')} **{_ck.name}**"
-            if _ck.expected is not None and _ck.actual is not None:
-                _lbl2 += f" — {_ck.actual} (예상 {_ck.expected})"
-            elif _ck.actual is not None:
-                _lbl2 += f" — {_ck.actual}"
-            st.markdown(_lbl2)
-            if _ck.detail:
-                st.caption(_ck.detail)
-            if _ck.items:
-                with st.expander(f"세부 {len(_ck.items)}건"):
-                    st.dataframe(pd.DataFrame(_ck.items), use_container_width=True, hide_index=True)
+        # === SKU별 검수 결과 테이블 ===
+        # 거래명세서 매칭 인덱스 (바코드 우선, sku_id 폴백)
+        _inv_by_bc: dict[str, Any] = {}
+        _inv_by_sku: dict[str, Any] = {}
+        if _invoice and _invoice.items:
+            _inv_by_bc = {it.barcode: it for it in _invoice.items if it.barcode}
+            _inv_by_sku = {str(it.sku_id): it for it in _invoice.items if it.sku_id}
+
+        def _match_invoice(sku: PlannedSku):
+            for bc in (sku.coupang_barcode, sku.own_wms_barcode):
+                if bc and bc in _inv_by_bc:
+                    return _inv_by_bc[bc]
+            if sku.sku_id and str(sku.sku_id) in _inv_by_sku:
+                return _inv_by_sku[str(sku.sku_id)]
+            return None
+
+        _NAME_SIM_THRESHOLD = 0.6
+        _check_rows: list[dict[str, Any]] = []
+        for _sku in _planned:
+            _inv = _match_invoice(_sku)
+            _bc, _ = derive_attached_barcode(_sku)
+            _expects_label = is_label_expected(_sku)
+            _label = _labels.get(_bc) if _bc else None
+
+            # 상품일치 (상품명)
+            if _inv:
+                _our_name = " ".join(filter(None, [_sku.product_name, _sku.option_name]))
+                _inv_name = _inv.product_name or ""
+                _name_sim = name_similarity(_our_name, _inv_name)
+                _name_ok = _name_sim >= _NAME_SIM_THRESHOLD
+            else:
+                _name_ok = None
+            # 발주수량 일치
+            if _inv:
+                _qty_ok = (_inv.confirmed_qty == _sku.inbound_qty)
+            else:
+                _qty_ok = None
+            # 소비기한 일치 (거래명세서 기준)
+            if _inv and _inv.expiry and _sku.expected_expiry:
+                _exp_ok = (_inv.expiry == _sku.expected_expiry)
+            else:
+                _exp_ok = None
+
+            # 라벨 인쇄 (수량 일치)
+            if not _expects_label:
+                _label_ok = "—"
+            elif _label is None:
+                _label_ok = False
+            else:
+                _label_ok = (_label.count == _sku.inbound_qty)
+            # 라벨 소비기한
+            if not _expects_label:
+                _label_exp_ok = "—"
+            elif _label is None or _label.expiry is None:
+                _label_exp_ok = False
+            else:
+                _label_exp_ok = (_label.expiry == _sku.expected_expiry)
+
+            def _icon(v):
+                if v is None:
+                    return "—"
+                if v == "—":
+                    return "—"
+                return "✅" if v else "❌"
+
+            _check_rows.append({
+                "확정수량": _sku.inbound_qty,
+                "소비기한": _sku.expected_expiry.isoformat() if _sku.expected_expiry else "",
+                "상품번호": str(_sku.sku_id) if _sku.sku_id else "",
+                "상품명": _sku.product_name or "",
+                "거래명세서 수량": (_inv.confirmed_qty if _inv else "—"),
+                "거래명세서 소비기한": (_inv.expiry.isoformat() if _inv and _inv.expiry else "—"),
+                "상품일치": _icon(_name_ok),
+                "발주수량": _icon(_qty_ok),
+                "거래명세서 소비기한 일치": _icon(_exp_ok),
+                "라벨 인쇄": _icon(_label_ok),
+                "라벨 소비기한": _icon(_label_exp_ok),
+            })
+
+        _check_df = pd.DataFrame(_check_rows)
+        st.dataframe(_check_df, use_container_width=True, hide_index=True, height=min(40 + 35 * len(_check_df), 600))
+
+        # === 전체(글로벌) 검수 항목 — 접어서 ===
+        with st.expander(f"전체 검수 항목 ({len(_report.checks)}건)", expanded=(_report.overall != "ok")):
+            _icon_map = {"ok": "✅", "warning": "⚠️", "fail": "❌"}
+            for _ck in _report.checks:
+                _lbl2 = f"{_icon_map.get(_ck.status, '•')} **{_ck.name}**"
+                if _ck.expected is not None and _ck.actual is not None:
+                    _lbl2 += f" — {_ck.actual} (예상 {_ck.expected})"
+                elif _ck.actual is not None:
+                    _lbl2 += f" — {_ck.actual}"
+                st.markdown(_lbl2)
+                if _ck.detail:
+                    st.caption(_ck.detail)
+                if _ck.items:
+                    with st.expander(f"세부 {len(_ck.items)}건"):
+                        st.dataframe(pd.DataFrame(_ck.items), use_container_width=True, hide_index=True)
 
         # === ③ 검수 끝 (이후 ④·⑤에서 사용할 변수 미리 준비) ===
         _order_base = (_invoice.order_id if _invoice and _invoice.order_id else _attachment.milkrun_id) or ""
