@@ -343,6 +343,17 @@ def _render_context_bar(plan, has_pdfs: bool = False) -> str:
     )
 
 
+def _section_note(text: str) -> None:
+    """섹션 헤더 아래 안내 문구 — 좌측 파란 테두리 + 옅은 파란 배경 + 진한 글자."""
+    import streamlit as _st
+    _st.markdown(
+        f'<div style="border-left:4px solid #3b82f6; padding:10px 14px; '
+        f'margin:4px 0 16px 0; background:#eff6ff; color:#1e3a8a; '
+        f'font-size:0.95em; line-height:1.55;">{text}</div>',
+        unsafe_allow_html=True,
+    )
+
+
 def _management_current_step(status: str, has_pdfs: bool) -> int:
     """관리 모드 현재 단계 추정 (① 통합 후 5단계 기준)."""
     if status == "completed":
@@ -422,7 +433,7 @@ if _is_new:
     )
 
     st.markdown("##### 1-1 기초자료 업로드")
-    st.caption("발주수량확정에 필요한 기초 자료를 취합하여 업로드해 주세요.")
+    _section_note("발주수량확정에 필요한 기초 자료를 취합하여 업로드해 주세요.")
 
     _UPLOAD_GUIDE_ROWS = [
         ("WMS 재고 파일", FILE_TYPE_WMS,
@@ -857,7 +868,7 @@ if _is_new:
     #       = 재생산 리드타임 동안 버틸 수 없음
     # 정확 계산이 아닌 "트리거" 성격 — 상세 분석은 별도 메뉴에서 수행 예정.
     st.markdown("##### 1-2 발주 수량 확정")
-    st.caption(
+    _section_note(
         "재발주 필요 품목 Check 항목 및 발주 수량을 검토한 후, '발주 수량 확정' 버튼을 눌러주세요."
     )
 
@@ -1386,7 +1397,7 @@ else:
     if _mgmt_step >= 3:
         _step3_label += " ✅"
     st.subheader(_step3_label)
-    st.caption("아래의 버튼을 클릭해서 파일을 다운로드 후 쿠팡의 입고관리에 업로드 해주세요.")
+    _section_note("아래의 버튼을 클릭해서 파일을 다운로드 후 쿠팡의 입고관리에 업로드 해주세요.")
     _plan_df = pd.DataFrame([
         {
             "상품명": i.product_name,
@@ -1517,8 +1528,8 @@ else:
     if _mgmt_status in ("verified", "completed"):
         _step4_label += " ✅"
     st.subheader(_step4_label)
-    st.caption(
-        "쿠팡 입고생성 결과물을 업로드 해주세요. "
+    _section_note(
+        "쿠팡 입고생성 결과물을 업로드 해주세요.<br>"
         "바코드 라벨 다운로드 시 소비기한 표기 체크는 필수이며, 번들 상품만 적용합니다."
     )
 
@@ -1765,9 +1776,9 @@ else:
         if _mgmt_status in ("verified", "completed"):
             _step5_label += " ✅"
         st.subheader(_step5_label)
-        st.caption(
-            "아래 파일들을 다운로드해서 메일로 송부 후, 단체 카톡방에 송부 완료 메세지를 남겨주세요. "
-            "메일 수신: minjiejie42@gmail.com, kim@nnutri.com, es@katchers.co.kr, "
+        _section_note(
+            "아래 파일들을 다운로드해서 메일로 송부 후, 단체 카톡방에 송부 완료 메세지를 남겨주세요.<br>"
+            "<b>메일 수신:</b> minjiejie42@gmail.com, kim@nnutri.com, es@katchers.co.kr, "
             "ysangh0913@gmail.com, jk@katchers.co.kr"
         )
 
@@ -1827,7 +1838,7 @@ else:
         if _mgmt_status == "completed":
             _step6_label += " ✅"
         st.subheader(_step6_label)
-        st.caption(
+        _section_note(
             "아래 발주서양식을 이지어드민에 업로드한 뒤, 생성된 확장주문검색 파일을 다시 올려 "
             "배송일괄·송장 파일을 받아주세요."
         )
