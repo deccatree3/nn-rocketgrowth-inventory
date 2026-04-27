@@ -883,6 +883,10 @@ if _is_new:
     #       = 재생산 리드타임 동안 버틸 수 없음
     # 정확 계산이 아닌 "트리거" 성격 — 상세 분석은 별도 메뉴에서 수행 예정.
     st.subheader("② 발주 수량 확정")
+    st.caption(
+        "각 SKU의 입고 수량을 검토·조정한 후 하단의 '발주 수량 확정' 버튼을 눌러주세요. "
+        "검색·필터·팔레트 최적화로 수량을 조정할 수 있습니다."
+    )
 
     reproduction_lead = cfg.reproduction_lead_days  # 기본 28일
 
@@ -1788,6 +1792,7 @@ else:
         if _mgmt_status in ("verified", "completed"):
             _step5_label += " ✅"
         st.subheader(_step5_label)
+        st.caption("아래 파일들을 다운로드해서 물류센터(다원로지스틱스)로 전달해주세요.")
 
         _dc = st.columns(3)
         try:
@@ -1845,6 +1850,10 @@ else:
         if _mgmt_status == "completed":
             _step6_label += " ✅"
         st.subheader(_step6_label)
+        st.caption(
+            "아래 발주서양식을 이지어드민에 업로드한 뒤, 생성된 확장주문검색 파일을 다시 올려 "
+            "배송일괄·송장 파일을 받아주세요."
+        )
         _ea = st.columns(3)
         try:
             _ord = build_order_form(_sec_items, _fc, str(_order_base).strip(), pallet_assignment=_pa)
