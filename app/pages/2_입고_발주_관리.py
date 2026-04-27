@@ -421,7 +421,7 @@ if _is_new:
         FILE_TYPE_LABELS, CompanyFileGroup, classify_uploaded_files,
     )
 
-    st.caption("업로드할 파일 4종 (여러 업체 파일 섞어 올려도 자동 분류):")
+    st.caption("기초자료 4개 파일을 업로드해주세요.")
 
     _UPLOAD_GUIDE_ROWS = [
         ("WMS 재고 파일", FILE_TYPE_WMS,
