@@ -701,15 +701,8 @@ if _is_new:
 
     base_df = pd.DataFrame(rows)
 
-    # --- 4-2. 팔레트 최적화 (토글) ----------------------------------------------
-    pallet_on = st.checkbox(
-        f"🚛 팔레트 단위 최적화 (1팔레트 = {cfg.pallet_size_boxes}박스)",
-        value=True,
-        help=(
-            f"체크 시: 총 박스수가 {cfg.pallet_size_boxes}의 배수가 되도록 항상 올림하여 팔레트를 꽉 채움. "
-            "체크 해제 시: 엔진 기본 추천값 그대로 사용 (팔레트 미충족 가능)."
-        ),
-    )
+    # --- 4-2. 팔레트 최적화 (토글 위젯은 ② 섹션 내부에서 렌더, 여기서는 값만 읽음) ---
+    pallet_on = st.session_state.get("_pallet_on_widget", True)
 
     # 팔레트 토글이 바뀌면 편집 세션 잔재 제거 — 바뀐 추천값이 그대로 반영되도록
     _prev_pallet_on = st.session_state.get("_pallet_on_prev")
@@ -968,6 +961,17 @@ if _is_new:
                 f"⚠️ {len(repro_list)}개 품목이 재생산 리드타임({reproduction_lead}일) 동안 버티지 못합니다. "
                 "생산/발주 담당자에게 재발주 검토를 요청해주세요."
             )
+
+    # --- 7-2. 팔레트 단위 최적화 토글 (재발주 Check 아래, 검색 위) ---------------
+    st.checkbox(
+        f"🚛 팔레트 단위 최적화 (1팔레트 = {cfg.pallet_size_boxes}박스)",
+        value=pallet_on,
+        key="_pallet_on_widget",
+        help=(
+            f"체크 시: 총 박스수가 {cfg.pallet_size_boxes}의 배수가 되도록 항상 올림하여 팔레트를 꽉 채움. "
+            "체크 해제 시: 엔진 기본 추천값 그대로 사용 (팔레트 미충족 가능)."
+        ),
+    )
 
 
     # --- 8. 편집 테이블 -------------------------------------------------------
