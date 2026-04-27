@@ -1716,14 +1716,15 @@ else:
             _inv_by_sku = {str(it.sku_id): it for it in _invoice.items if it.sku_id}
 
         def _match_invoice(sku: PlannedSku):
+            # 1순위: SKU ID (= 거래명세서 상품번호) — 스크린샷 룰
+            if sku.sku_id and str(sku.sku_id) in _inv_by_sku:
+                return _inv_by_sku[str(sku.sku_id)]
+            # 폴백: 바코드 매칭 (sku_id 가 비어있는 경우 대비)
             for bc in (sku.coupang_barcode, sku.own_wms_barcode):
                 if bc and bc in _inv_by_bc:
                     return _inv_by_bc[bc]
-            if sku.sku_id and str(sku.sku_id) in _inv_by_sku:
-                return _inv_by_sku[str(sku.sku_id)]
             return None
 
-        _NAME_SIM_THRESHOLD = 0.6
         _check_rows: list[dict[str, Any]] = []
         for _sku in _planned:
             _inv = _match_invoice(_sku)
@@ -1731,14 +1732,8 @@ else:
             _expects_label = is_label_expected(_sku)
             _label = _labels.get(_bc) if _bc else None
 
-            # 상품일치 (상품명)
-            if _inv:
-                _our_name = " ".join(filter(None, [_sku.product_name, _sku.option_name]))
-                _inv_name = _inv.product_name or ""
-                _name_sim = name_similarity(_our_name, _inv_name)
-                _name_ok = _name_sim >= _NAME_SIM_THRESHOLD
-            else:
-                _name_ok = None
+            # 상품일치: 거래명세서에 sku_id 매칭 항목이 존재하는지 (있으면 동일 상품 DB record)
+            _name_ok = (_inv is not None) if (_invoice and _invoice.items) else None
             # 발주수량 일치
             if _inv:
                 _qty_ok = (_inv.confirmed_qty == _sku.inbound_qty)

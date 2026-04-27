@@ -493,15 +493,8 @@ def verify(
         _inv_matched: set[str] = set()  # 매칭된 invoice barcode
         for s in planned_skus:
             matched = False
-            # 1순위: 바코드 매칭
-            for bc in [s.coupang_barcode, s.own_wms_barcode]:
-                if bc and bc in inv_by_barcode:
-                    _planned_matched.add(s.coupang_option_id)
-                    _inv_matched.add(bc)
-                    matched = True
-                    break
-            # 2순위: SKU ID 매칭 (거래명세서의 상품번호 = SKU ID)
-            if not matched and s.sku_id:
+            # 1순위: SKU ID 매칭 (거래명세서의 상품번호 = SKU ID) — 스크린샷 룰
+            if s.sku_id:
                 _sku_str = str(s.sku_id)
                 if _sku_str in inv_by_sku:
                     _planned_matched.add(s.coupang_option_id)
@@ -509,6 +502,14 @@ def verify(
                     if _inv_item.barcode:
                         _inv_matched.add(_inv_item.barcode)
                     matched = True
+            # 폴백: 바코드 매칭 (sku_id 비어있는 경우 대비)
+            if not matched:
+                for bc in [s.coupang_barcode, s.own_wms_barcode]:
+                    if bc and bc in inv_by_barcode:
+                        _planned_matched.add(s.coupang_option_id)
+                        _inv_matched.add(bc)
+                        matched = True
+                        break
 
         missing_in_invoice_skus = [s for s in planned_skus if s.coupang_option_id not in _planned_matched]
         extra_in_invoice = set(inv_by_barcode.keys()) - _inv_matched
