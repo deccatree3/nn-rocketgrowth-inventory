@@ -275,6 +275,87 @@ STATUS_LABELS = {"draft": "📝 임시저장", "verified": "✅ 발주확정", "
 
 
 # ---------------------------------------------------------------------------
+# 단계별 UI helper (5단계 위저드)
+# ---------------------------------------------------------------------------
+_WIZARD_STEPS = [
+    ("①", "📦", "기초자료 업로드"),
+    ("②", "🛒", "발주 수량 확정"),
+    ("③", "📥", "쿠팡 업로드 파일"),
+    ("④", "📑", "검수 & 물류센터"),
+    ("⑤", "🏁", "결과 등록"),
+]
+
+
+def _render_stepper(current: int, completed: set[int] | frozenset[int] = frozenset()) -> str:
+    """5단계 가로 스테퍼 HTML."""
+    cells: list[str] = []
+    for idx, (no, icon, label) in enumerate(_WIZARD_STEPS, start=1):
+        if idx in completed:
+            bg, color, weight, mark = "#e8f7ee", "#0a7", "600", "✅"
+        elif idx == current:
+            bg, color, weight, mark = "#3b82f6", "#fff", "700", no
+        else:
+            bg, color, weight, mark = "#f3f4f6", "#888", "400", no
+        cells.append(
+            f'<div style="flex:1; min-width:0; padding:10px 8px; '
+            f'background:{bg}; color:{color}; border-radius:6px; '
+            f'font-weight:{weight}; text-align:center; '
+            f'white-space:nowrap; overflow:hidden; text-overflow:ellipsis; '
+            f'font-size:0.9em;">'
+            f'<span style="font-size:1.05em; margin-right:4px;">{mark}</span>'
+            f'<span>{icon} {label}</span>'
+            f'</div>'
+        )
+        if idx < len(_WIZARD_STEPS):
+            cells.append(
+                '<div style="flex:0 0 16px; text-align:center; color:#bbb;">→</div>'
+            )
+    return (
+        '<div style="display:flex; align-items:center; gap:0; '
+        'margin:6px 0 14px 0;">' + "".join(cells) + "</div>"
+    )
+
+
+def _render_context_bar(plan, has_pdfs: bool = False) -> str:
+    """관리 모드 상단 회차 컨텍스트 바."""
+    sid = f"#{plan.id}"
+    status_label = STATUS_LABELS.get(plan.status or "draft", plan.status or "?")
+    company = plan.company_name or "—"
+    fc = plan.fc_name or "미정"
+    arr = plan.arrival_date or plan.plan_date or "미정"
+    worker = plan.worker or "미정"
+    milkrun = plan.milkrun_id or "미정"
+    parts = [
+        f'<span style="background:#fef3c7; color:#92400e; padding:3px 8px; '
+        f'border-radius:4px; font-weight:700;">{sid}</span>',
+        f'<span>{status_label}</span>',
+        f'<span><b>업체</b> {company}</span>',
+        f'<span><b>FC</b> {fc}</span>',
+        f'<span><b>입고일</b> {arr}</span>',
+        f'<span><b>작업자</b> {worker}</span>',
+        f'<span><b>milkrun_id</b> {milkrun}</span>',
+    ]
+    return (
+        '<div style="display:flex; flex-wrap:wrap; gap:12px; align-items:center; '
+        'padding:8px 12px; background:#f9fafb; border:1px solid #e5e7eb; '
+        'border-radius:6px; margin:0 0 10px 0; font-size:0.92em;">'
+        + "".join(parts) + "</div>"
+    )
+
+
+def _management_current_step(status: str, has_pdfs: bool) -> int:
+    """관리 모드 현재 단계 추정."""
+    if status == "completed":
+        return 5
+    if status == "verified":
+        return 5  # 5번 단계 진행 중
+    # status == "draft"
+    if has_pdfs:
+        return 4
+    return 3
+
+
+# ---------------------------------------------------------------------------
 # 페이지
 # ---------------------------------------------------------------------------
 st.set_page_config(page_title="입고 발주 관리", page_icon="📦", layout="wide")
@@ -325,11 +406,15 @@ _selected_plan_id = int(_selected_mode.split("#")[1].split(" ")[0]) if not _is_n
 
 if _is_new:
         # ====================================================================
-        # 신규 계획 모드
+        # 신규 계획 모드 (단계 ① → ②)
         # ====================================================================
 
-        # --- 1. 기초자료 업로드 ---------------------------------------------------
-    st.subheader("1. 기초자료 업로드")
+    # 상단 5단계 스테퍼 (현재 단계는 파일 업로드 여부로 판정 — 파일 분류 후 다시 갱신)
+    _stepper_ph = st.empty()
+    _stepper_ph.markdown(_render_stepper(current=1, completed=set()), unsafe_allow_html=True)
+
+        # --- ① 기초자료 업로드 -----------------------------------------------------
+    st.subheader("📦 ① 기초자료 업로드")
 
     from lib.file_classifier import (
         FILE_TYPE_COUPANG, FILE_TYPE_WMS, FILE_TYPE_TEMPLATE, FILE_TYPE_MOVEMENT,
@@ -453,6 +538,12 @@ if _is_new:
         _need = 3 if FILE_TYPE_MOVEMENT in _optional_for_this else 4
         st.warning(f"**{selected_company}** 의 필수 파일 {_need}종이 모두 필요합니다.")
         st.stop()
+
+    # 필수 파일 모두 도착 → 스테퍼를 ②로 진행
+    _stepper_ph.markdown(
+        _render_stepper(current=2, completed={1}),
+        unsafe_allow_html=True,
+    )
 
 
     # --- 2. 파싱 -------------------------------------------------------------
@@ -781,7 +872,7 @@ if _is_new:
     #   B. 밀크런 출고 후 잔여 낱개 < 부모 풀 합산 판매속도 × 재생산리드타임(28일)
     #       = 재생산 리드타임 동안 버틸 수 없음
     # 정확 계산이 아닌 "트리거" 성격 — 상세 분석은 별도 메뉴에서 수행 예정.
-    st.subheader("2. 발주 수량 확정")
+    st.subheader("🛒 ② 발주 수량 확정")
 
     reproduction_lead = cfg.reproduction_lead_days  # 기본 28일
 
@@ -1189,54 +1280,23 @@ if _is_new:
             else:
                 st.caption("조정 없음")
 
+    # === ② 끝: 발주 수량 확정 버튼 ===
     st.divider()
-    st.subheader("3. 쿠팡 입고생성 업로드 파일 생성")
-
-    # export_items 준비 — allocated_df 전체 사용 (필터와 무관)
-    # edited (필터된 view) 에서 수정된 inbound_final 을 allocated_df 에 반영
-    _export_df = allocated_df.copy()
-    for _, erow in edited.iterrows():
-        _eid = int(erow["coupang_option_id"])
-        _ev = _ni(erow.get("inbound_final")) or 0
-        _export_df.loc[_export_df["coupang_option_id"] == _eid, "inbound_final"] = _ev
-
-    export_items = []
-    for _, row in _export_df.iterrows():
-        qty = _ni(row["inbound_final"]) or 0
-        if qty <= 0:
-            continue
-        opt_id = int(row["coupang_option_id"])
-        arow = allocated_df[allocated_df["coupang_option_id"] == opt_id]
-        be = arow.iloc[0].get("selected_batch_expiry") if len(arow) > 0 else None
-        slm = (
-            int(arow.iloc[0]["shelf_life_days"])
-            if len(arow) > 0 and pd.notna(arow.iloc[0].get("shelf_life_days"))
-            else None
+    if confirmed_qty == 0:
+        st.button(
+            "✅ 발주 수량 확정 → 다음 단계 (③ 쿠팡 입고생성 업로드 파일)",
+            disabled=True,
+            use_container_width=True,
+            help="확정 수량을 1개 이상 입력해야 다음 단계로 진행할 수 있습니다.",
         )
-        if be is not None and not (isinstance(be, float) and pd.isna(be)):
-            exp, man = dates_from_batch(be, slm)
-        else:
-            exp, man = default_expiry_dates(slm)
-        own_bc = arow.iloc[0]["own_wms_barcode"] if len(arow) > 0 else None
-        export_items.append(
-            ExportItem(
-                coupang_option_id=opt_id,
-                inbound_qty=qty,
-                shelf_life_days=slm,
-                expiry_date=exp,
-                manufacture_date=man,
-                wms_barcode=own_bc,
-                product_name=row["product_name"],
-            )
-        )
-
-    # 쿠팡 양식: 필수 업로드 (template_file 은 이미 필수 검증 통과)
-    tpl_source = io.BytesIO(template_file.getvalue())
-    tpl_label = template_file.name
-
-    col_sv, col_dl = st.columns([1, 1])
-    with col_sv:
-        if st.button("💾 임시 저장 (검수 대기)", type="primary", use_container_width=True):
+        st.caption("확정 수량을 입력한 후 이 버튼을 누르면 발주가 저장되고 ③ 단계로 진행합니다.")
+    else:
+        if st.button(
+            "✅ 발주 수량 확정 → 다음 단계 (③ 쿠팡 입고생성 업로드 파일)",
+            type="primary",
+            use_container_width=True,
+            help="현재 입력한 확정 수량을 저장하고 ③ 쿠팡 업로드 파일 단계로 이동합니다.",
+        ):
             try:
                 save_df = allocated_df.copy()
                 for _, erow in edited.iterrows():
@@ -1262,55 +1322,12 @@ if _is_new:
                     raw_files=_raw_files,
                 )
                 st.success(
-                    f"임시 저장 완료 (plan_id={plan_id}). 검수·2차결과물 단계로 이동합니다. "
-                    f"(쿠팡 입고생성 업로드 파일은 기존 관리 모드의 재생성 버튼으로 다운로드 가능)"
+                    f"발주 수량 확정 완료 (plan_id={plan_id}). ③ 쿠팡 입고생성 업로드 파일 단계로 이동합니다."
                 )
-                # 위젯 생성 전에 pending 플래그로 처리 (session_state 직접수정 불가 회피)
                 st.session_state["_pending_plan_id"] = plan_id
                 st.rerun()
             except Exception as e:
                 st.error(f"저장 실패: {e}")
-
-    with col_dl:
-        if confirmed_qty == 0:
-            st.button("📥 쿠팡 입고생성 업로드 파일 생성", disabled=True, use_container_width=True)
-            st.caption("확정 수량을 입력하세요.")
-        else:
-            try:
-                xlsx, _missing = fill_coupang_template(
-                    tpl_source,
-                    export_items,
-                    delete_non_target=True,
-                )
-                st.download_button(
-                    "📥 쿠팡 입고생성 업로드 파일 생성",
-                    data=xlsx,
-                    file_name=f"generated_excel_{date.today().isoformat()}.xlsx",
-                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                    type="primary",
-                    use_container_width=True,
-                )
-                filled_count = len(export_items) - len(_missing)
-                st.caption(
-                    f"✅ {filled_count}/{len(export_items)}건 반영 · 양식: {tpl_label} · "
-                    f"입고수량·유통기한·제조일자 채움, 비대상 행 삭제"
-                )
-                if _missing:
-                    st.error(
-                        f"⚠️ {len(_missing)}건 누락: 쿠팡 양식에 해당 옵션ID가 없어 반영되지 않았습니다. "
-                        f"쿠팡 Wing에서 최신 양식을 다시 다운받아 사용하세요."
-                    )
-                    st.dataframe(
-                        pd.DataFrame(_missing).rename(columns={
-                            "coupang_option_id": "옵션ID",
-                            "product_name": "상품명",
-                            "inbound_qty": "확정수량",
-                        }),
-                        use_container_width=True,
-                        hide_index=True,
-                    )
-            except Exception as e:
-                st.error(f"양식 생성 실패: {e}")
 
 
 
@@ -1327,11 +1344,22 @@ else:
     _mgmt_company = _mgmt_plan.company_name or "서현"
     _is_completed = _mgmt_status == "completed"
 
-    st.info(
-        f"**#{_mgmt_plan.id}** · {STATUS_LABELS.get(_mgmt_status, _mgmt_status)} · "
-        f"{_mgmt_company} · FC: {_mgmt_plan.fc_name or '미정'} · "
-        f"입고일: {_mgmt_plan.arrival_date or '미정'} · "
-        f"milkrun_id: {_mgmt_plan.milkrun_id or '미정'}"
+    # === 상단: 회차 컨텍스트 바 + 5단계 스테퍼 ===
+    st.markdown(_render_context_bar(_mgmt_plan), unsafe_allow_html=True)
+
+    # 스테퍼: status 기반 단계 추정. 1·2 단계는 항상 완료 (저장된 계획).
+    _mgmt_step = _management_current_step(_mgmt_status, has_pdfs=False)
+    _mgmt_completed: set[int] = {1, 2}
+    if _mgmt_step >= 4:
+        _mgmt_completed.add(3)
+    if _mgmt_step >= 5 and _mgmt_status == "completed":
+        _mgmt_completed.add(4)
+        _mgmt_completed.add(5)
+    elif _mgmt_step == 5:
+        _mgmt_completed.add(4)
+    st.markdown(
+        _render_stepper(current=_mgmt_step, completed=_mgmt_completed),
+        unsafe_allow_html=True,
     )
 
     # --- 공통 데이터 로드 ---
@@ -1355,8 +1383,11 @@ else:
         st.warning("이 계획에 확정 수량(>0) SKU가 없습니다.")
         st.stop()
 
-    # === 1. 입고 계획 요약 ===
-    with st.expander("📦 1. 입고 계획 요약", expanded=(_mgmt_status == "draft")):
+    # === ③ 쿠팡 입고생성 업로드 파일 (계획 요약 포함) ===
+    _step3_label = "📥 ③ 쿠팡 입고생성 업로드 파일"
+    if _mgmt_step >= 4:
+        _step3_label += " ✅"
+    with st.expander(_step3_label, expanded=(_mgmt_status == "draft" and _mgmt_step == 3)):
         _plan_df = pd.DataFrame([
             {
                 "상품명": i.product_name,
@@ -1481,8 +1512,11 @@ else:
         ]
         _pa = pa_assign_pallets(_pa_items, pallet_size=cfg.pallet_size_boxes)
 
-    # === 2. 검수 & 물류센터 전달 파일 ===
-    with st.expander("📑 2. 검수 & 물류센터 전달 파일", expanded=(_mgmt_status == "draft")):
+    # === ④ 검수 & 물류센터 전달 파일 ===
+    _step4_label = "📑 ④ 검수 & 물류센터 전달 파일"
+    if _mgmt_status in ("verified", "completed"):
+        _step4_label += " ✅"
+    with st.expander(_step4_label, expanded=(_mgmt_status == "draft")):
         _pdf_up = st.file_uploader(
             "쿠팡 입고생성 결과물 파일(PDF 3개)를 업로드",
             type=["pdf"], accept_multiple_files=True,
@@ -1750,9 +1784,12 @@ else:
         else:
             st.info("라벨 PDF와 물류부착문서 PDF를 업로드하세요.")
 
-    # === 3. 재고차감 (3차 결과물) ===
+    # === ⑤ 재고차감 / 마무리 (3차 결과물) ===
     if _mgmt_status in ("verified", "completed") and _label_pdf and _attach_pdf:
-        with st.expander("📦 3. 재고차감 (3차 결과물)", expanded=(_mgmt_status == "verified")):
+        _step5_label = "🏁 ⑤ 재고차감 / 마무리 (이지어드민 재고차감 파일)"
+        if _mgmt_status == "completed":
+            _step5_label += " ✅"
+        with st.expander(_step5_label, expanded=(_mgmt_status == "verified")):
             _order_base3 = (_invoice.order_id if _invoice and _invoice.order_id else None) or (_mgmt_plan.milkrun_id or "")
 
             _os_uploaded = "order_search" in _mgmt_files
