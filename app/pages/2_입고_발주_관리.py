@@ -1896,8 +1896,8 @@ else:
                 except Exception as e:
                     st.error(f"확정 실패: {e}")
 
-        # === ④ 물류센터 전달 파일 생성 ===
-        _step5_label = "④ 물류센터 전달 파일 생성"
+        # === ④ 물류센터 전달 파일 & 공유시트 기록 ===
+        _step5_label = "④ 물류센터 전달 파일 & 공유시트 기록"
         if _mgmt_status in ("verified", "completed"):
             _step5_label += " ✅"
         st.subheader(_step5_label)
@@ -1957,6 +1957,40 @@ else:
             st.download_button("📥 물류부착문서(팔레트부착)", data=_ab,
                 file_name=f"밀크런_물류부착문서1 (팔레트부착문서)_{_fc}_{_datesuf}.pdf", mime="application/pdf",
                 use_container_width=True, type="primary")
+
+        # === 공유시트 기록용 파일 ===
+        st.markdown("##### 공유시트 기록")
+        _ss_col1, _ss_col2 = st.columns([2, 1])
+        with _ss_col1:
+            _inbound_id = st.text_input(
+                "입고ID",
+                key=f"share_sheet_inbound_id_{_selected_plan_id}",
+                help="공유시트의 '입고ID' 컬럼에 채울 값. 쿠팡 입고생성 후 발급된 ID를 입력하세요.",
+            )
+        from lib.secondary_export import build_share_sheet
+        _request_d = _mgmt_plan.plan_date or _arr
+        with _ss_col2:
+            if not _inbound_id.strip():
+                st.button("📥 공유시트 다운로드", disabled=True, use_container_width=True,
+                    help="입고ID 를 먼저 입력해주세요.")
+            else:
+                try:
+                    _ss_bytes = build_share_sheet(
+                        _sec_items,
+                        request_date=_request_d,
+                        arrival_date=_arr,
+                        company_short=cfg.default_company_name,
+                        inbound_id=_inbound_id.strip(),
+                    )
+                    st.download_button(
+                        "📥 공유시트 다운로드",
+                        data=_ss_bytes,
+                        file_name=f"공유시트_{_yymmdd}_{_fc}.xlsx",
+                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                        use_container_width=True, type="primary",
+                    )
+                except Exception as e:
+                    st.error(f"생성 실패: {e}")
 
         # === ⑤ 이지어드민 재고 차감 ===
         _step6_label = "⑤ 이지어드민 재고 차감"

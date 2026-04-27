@@ -64,6 +64,69 @@ def calc_weight_kg(item: SecondaryItem, boxes_in_section: int) -> float:
     return (item.weight_g * qty + 500 * boxes_in_section) / 1000
 
 
+def build_share_sheet(
+    items: list[SecondaryItem],
+    *,
+    request_date: date,
+    arrival_date: date,
+    company_short: str,
+    inbound_id: str,
+    status_text: str = "입고생성완료",
+) -> bytes:
+    """공유시트 xlsx 생성 — 14컬럼 단일 시트.
+
+    컬럼: 요청일, 번들요청일, 채널, 우선순위, 상품명, 유형, 수량, 입수량, 박스수,
+          옵션ID, 소비기한, 도착예정일, 입고ID, 처리상태
+    """
+    import xlsxwriter as _xw
+
+    headers = [
+        "요청일", "번들요청일", "채널", "우선순위", "상품명", "유형",
+        "수량", "입수량", "박스수", "옵션ID", "소비기한",
+        "도착예정일", "입고ID", "처리상태",
+    ]
+
+    buf = BytesIO()
+    wb = _xw.Workbook(buf, {"in_memory": True})
+    ws = wb.add_worksheet("Sheet1")
+    date_fmt = wb.add_format({"num_format": "yyyy-mm-dd"})
+
+    for c, h in enumerate(headers):
+        ws.write_string(0, c, h)
+
+    channel = f"{company_short}컴밀크런"
+    for r, it in enumerate(items, start=1):
+        if it.boxes <= 0:
+            continue
+        # 상품명: WMS 제품명 우선 (취합리스트와 동일 규칙)
+        name = it.wms_product_name or it.product_name or ""
+        ws.write_datetime(r, 0, request_date, date_fmt)   # 요청일
+        ws.write_datetime(r, 1, request_date, date_fmt)   # 번들요청일
+        ws.write_string(r, 2, channel)                    # 채널
+        # 우선순위 (3) - 비움
+        ws.write_string(r, 4, name)                       # 상품명
+        # 유형 (5) - 비움
+        ws.write_number(r, 6, int(it.inbound_qty))        # 수량
+        ws.write_number(r, 7, int(it.box_qty))            # 입수량
+        ws.write_number(r, 8, int(it.boxes))              # 박스수
+        ws.write_string(r, 9, str(it.coupang_option_id))  # 옵션ID
+        if it.expiry_date:
+            ws.write_datetime(r, 10, it.expiry_date, date_fmt)
+        ws.write_datetime(r, 11, arrival_date, date_fmt)  # 도착예정일
+        ws.write_string(r, 12, str(inbound_id))           # 입고ID
+        ws.write_string(r, 13, status_text)               # 처리상태
+
+    ws.set_column(4, 4, 40)  # 상품명 폭
+    ws.set_column(0, 1, 12)
+    ws.set_column(11, 11, 12)
+    ws.set_column(12, 12, 22)
+    ws.freeze_panes(1, 0)
+
+    wb.close()
+    buf.seek(0)
+    return buf.getvalue()
+
+
 # ============================================================================
 # 1) 취합리스트 (서현_밀크런_취합리스트_*_FC.xlsx)
 # ============================================================================
