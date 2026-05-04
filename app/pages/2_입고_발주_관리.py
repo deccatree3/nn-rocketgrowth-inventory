@@ -80,23 +80,38 @@ def _ni(v):
 def _resolve_parent_barcode(
     cp_master: CoupangProduct | None,
     wms_masters_by_bc: dict[str, WmsProduct],
+    wms_masters_by_opt: dict[int, WmsProduct] | None = None,
 ) -> tuple[str | None, int]:
     """coupang 옵션 → (부모 WMS 바코드, unit_qty) 를 결정.
 
     - wms_product 테이블의 parent_wms_barcode 와 unit_qty 를 우선 사용
     - parent 가 0/None/self 면 '자기 자신이 부모' 로 간주 (단일팩)
+    - 쿠팡상품정보의 wms_barcode 가 비어있는 경우 (예: 캐처스 번들 — WMS는 단품으로만 관리),
+      wms_masters_by_opt 로 옵션ID 역조회하여 부모를 찾는 fallback 적용
     """
-    if not cp_master or not cp_master.wms_barcode:
+    if not cp_master:
         return None, 1
-    bc = cp_master.wms_barcode
-    wp = wms_masters_by_bc.get(bc)
-    if not wp:
-        return bc, 1
-    unit_qty = int(wp.unit_qty or 1)
-    parent = wp.parent_wms_barcode
-    if not parent or str(parent) in ("0", "") or parent == bc:
-        return bc, unit_qty
-    return str(parent), unit_qty
+    if cp_master.wms_barcode:
+        bc = cp_master.wms_barcode
+        wp = wms_masters_by_bc.get(bc)
+        if not wp:
+            return bc, 1
+        unit_qty = int(wp.unit_qty or 1)
+        parent = wp.parent_wms_barcode
+        if not parent or str(parent) in ("0", "") or parent == bc:
+            return bc, unit_qty
+        return str(parent), unit_qty
+
+    if wms_masters_by_opt and cp_master.coupang_option_id:
+        wp = wms_masters_by_opt.get(cp_master.coupang_option_id)
+        if wp:
+            unit_qty = int(wp.unit_qty or 1)
+            parent = wp.parent_wms_barcode
+            if parent and str(parent) not in ("0", "") and parent != wp.wms_barcode:
+                return str(parent), unit_qty
+            return wp.wms_barcode, unit_qty
+
+    return None, 1
 
 
 def _upsert_coupang_snapshot(session, snap: CoupangSnapshot) -> CoupangInventorySnapshot:
@@ -612,6 +627,7 @@ if _is_new:
         ).scalars().all()
     cp_master_by_opt = {m.coupang_option_id: m for m in cp_masters}
     wms_master_by_bc = {m.wms_barcode: m for m in wms_masters}
+    wms_master_by_opt = {m.coupang_option_id: m for m in wms_masters if m.coupang_option_id}
 
     include_all = False  # 비관리 SKU 는 항상 제외 (수동입고여부=1 만 표시)
 
@@ -626,7 +642,7 @@ if _is_new:
             if not cm.milkrun_managed and not include_all:
                 continue
 
-        parent_bc, unit_qty = _resolve_parent_barcode(cm, wms_master_by_bc) if cm else (None, 1)
+        parent_bc, unit_qty = _resolve_parent_barcode(cm, wms_master_by_bc, wms_master_by_opt) if cm else (None, 1)
         # box_qty / shelf_life 는 wms_product 에서 직접 조회 (옵션의 wms_barcode 기준)
         own_bc = cm.wms_barcode if cm else None
         own_wp = wms_master_by_bc.get(own_bc) if own_bc else None
@@ -1383,9 +1399,11 @@ else:
         _mgmt_cp = {m.coupang_option_id: m for m in _ms.execute(
             select(CoupangProduct).where(CoupangProduct.company_name == _mgmt_company)
         ).scalars().all()}
-        _mgmt_wms = {m.wms_barcode: m for m in _ms.execute(
+        _mgmt_wms_list = _ms.execute(
             select(WmsProduct).where(WmsProduct.company_name == _mgmt_company)
-        ).scalars().all()}
+        ).scalars().all()
+        _mgmt_wms = {m.wms_barcode: m for m in _mgmt_wms_list}
+        _mgmt_wms_by_opt = {m.coupang_option_id: m for m in _mgmt_wms_list if m.coupang_option_id}
 
     _mgmt_files = _load_plan_files(_selected_plan_id)
 
@@ -1467,7 +1485,7 @@ else:
         _cm5 = _mgmt_cp.get(_it.coupang_option_id)
         _own5 = _cm5.wms_barcode if _cm5 else None
         _wp5 = _mgmt_wms.get(_own5) if _own5 else None
-        _pbc5, _uq5 = _resolve_parent_barcode(_cm5, _mgmt_wms) if _cm5 else (None, 1)
+        _pbc5, _uq5 = _resolve_parent_barcode(_cm5, _mgmt_wms, _mgmt_wms_by_opt) if _cm5 else (None, 1)
         _pwp5 = _mgmt_wms.get(_pbc5) if _pbc5 else None
         _wg5 = (_wp5.weight_g if _wp5 and _wp5.weight_g else 0) or (_pwp5.weight_g if _pwp5 and _pwp5.weight_g else 0)
         _shl5 = (_wp5.shelf_life_days if _wp5 else None) or (_pwp5.shelf_life_days if _pwp5 else None)
@@ -1646,7 +1664,7 @@ else:
             _cm6 = _mgmt_cp.get(_it.coupang_option_id)
             _own6 = _cm6.wms_barcode if _cm6 else None
             _cbc6 = _cm6.coupang_barcode if _cm6 else None
-            _pbc6, _uq6 = _resolve_parent_barcode(_cm6, _mgmt_wms) if _cm6 else (None, 1)
+            _pbc6, _uq6 = _resolve_parent_barcode(_cm6, _mgmt_wms, _mgmt_wms_by_opt) if _cm6 else (None, 1)
             _wp6 = _mgmt_wms.get(_own6) if _own6 else None
             _pwp6 = _mgmt_wms.get(_pbc6) if _pbc6 else None
             _shl6 = (_wp6.shelf_life_days if _wp6 else None) or (_pwp6.shelf_life_days if _pwp6 else None)
