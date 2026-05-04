@@ -86,31 +86,44 @@ def _resolve_parent_barcode(
 
     - wms_product 테이블의 parent_wms_barcode 와 unit_qty 를 우선 사용
     - parent 가 0/None/self 면 '자기 자신이 부모' 로 간주 (단일팩)
-    - 쿠팡상품정보의 wms_barcode 가 비어있는 경우 (예: 캐처스 번들 — WMS는 단품으로만 관리),
-      wms_masters_by_opt 로 옵션ID 역조회하여 부모를 찾는 fallback 적용
+    - 다음 두 케이스에서 wms_masters_by_opt(옵션ID 역조회) fallback 적용
+      (예: 캐처스 번들 — WMS는 단품으로만 관리):
+        1) 쿠팡상품정보의 wms_barcode 가 비어있음
+        2) 쿠팡상품정보의 wms_barcode 는 채워져 있으나 WMS상품정보에 그 바코드 행이 없음
     """
     if not cp_master:
         return None, 1
+
+    def _try_opt_fallback() -> tuple[str | None, int] | None:
+        if not wms_masters_by_opt or not cp_master.coupang_option_id:
+            return None
+        wp = wms_masters_by_opt.get(cp_master.coupang_option_id)
+        if not wp:
+            return None
+        unit_qty = int(wp.unit_qty or 1)
+        parent = wp.parent_wms_barcode
+        if parent and str(parent) not in ("0", "") and parent != wp.wms_barcode:
+            return str(parent), unit_qty
+        return wp.wms_barcode, unit_qty
+
     if cp_master.wms_barcode:
         bc = cp_master.wms_barcode
         wp = wms_masters_by_bc.get(bc)
-        if not wp:
-            return bc, 1
-        unit_qty = int(wp.unit_qty or 1)
-        parent = wp.parent_wms_barcode
-        if not parent or str(parent) in ("0", "") or parent == bc:
-            return bc, unit_qty
-        return str(parent), unit_qty
-
-    if wms_masters_by_opt and cp_master.coupang_option_id:
-        wp = wms_masters_by_opt.get(cp_master.coupang_option_id)
         if wp:
             unit_qty = int(wp.unit_qty or 1)
             parent = wp.parent_wms_barcode
-            if parent and str(parent) not in ("0", "") and parent != wp.wms_barcode:
-                return str(parent), unit_qty
-            return wp.wms_barcode, unit_qty
+            if not parent or str(parent) in ("0", "") or parent == bc:
+                return bc, unit_qty
+            return str(parent), unit_qty
+        # WMS상품정보에 그 바코드 행 없음 → 옵션ID fallback 시도
+        fb = _try_opt_fallback()
+        if fb is not None:
+            return fb
+        return bc, 1
 
+    fb = _try_opt_fallback()
+    if fb is not None:
+        return fb
     return None, 1
 
 
