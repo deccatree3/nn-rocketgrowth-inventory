@@ -61,10 +61,13 @@ def _to_date(v: Any):
 # ---------------------------------------------------------------------------
 # 파싱
 # ---------------------------------------------------------------------------
-def parse_wms_sheet(ws) -> list[dict[str, Any]]:
-    """openpyxl worksheet → WmsProduct 딕트 리스트.
+def parse_wms_sheet(ws) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    """openpyxl worksheet → (WmsProduct 딕트 리스트, 스킵된 행 리스트).
 
     첫 컬럼이 '업체'이면 offset=1 (컬럼 한 칸 밀림), 아니면 offset=0.
+
+    스킵: WMS바코드(PK) 가 비어있으면 INSERT 불가하므로 제외. 단, 다른 컬럼에
+    값이 있어 의도된 행으로 보이는 경우는 skipped 리스트에 수집해 사용자에게 통지.
     """
     # 헤더 행 + offset 감지
     header_row = 1
@@ -84,10 +87,28 @@ def parse_wms_sheet(ws) -> list[dict[str, Any]]:
     o = offset  # shorthand
 
     records = []
+    skipped: list[dict[str, Any]] = []
     for r in range(start_row, ws.max_row + 1):
         company = _to_str(ws.cell(row=r, column=1).value) if o >= 1 else None
         barcode = _to_str(ws.cell(row=r, column=1 + o).value)
         if not barcode:
+            # 다른 컬럼에 데이터가 있으면 의도된 행 — skipped 로 통지
+            other_cells = [
+                ("제품명", _to_str(ws.cell(row=r, column=2 + o).value)),
+                ("낱개수량", _to_int(ws.cell(row=r, column=3 + o).value)),
+                ("부모_WMS바코드", _to_str(ws.cell(row=r, column=4 + o).value)),
+                ("박스낱수", _to_int(ws.cell(row=r, column=5 + o).value)),
+                ("중량", _to_int(ws.cell(row=r, column=6 + o).value)),
+                ("소비기한일수", _to_int(ws.cell(row=r, column=7 + o).value)),
+                ("옵션ID", _to_int(ws.cell(row=r, column=8 + o).value)),
+                ("부모_옵션ID", _to_int(ws.cell(row=r, column=9 + o).value)),
+            ]
+            if any(v not in (None, "") for _, v in other_cells):
+                skipped.append({
+                    "row_no": r,
+                    "company_name": company,
+                    **{k: v for k, v in other_cells},
+                })
             continue
         rec = {
             "wms_barcode": barcode,
@@ -103,7 +124,7 @@ def parse_wms_sheet(ws) -> list[dict[str, Any]]:
         if company:
             rec["company_name"] = company
         records.append(rec)
-    return records
+    return records, skipped
 
 
 def parse_coupang_sheet(ws) -> list[dict[str, Any]]:
@@ -154,12 +175,16 @@ def parse_coupang_sheet(ws) -> list[dict[str, Any]]:
 
 
 def parse_master_file(file_bytes: bytes, filename: str) -> dict[str, list[dict]]:
-    """마스터 파일을 파싱하여 {'wms': [...], 'coupang': [...]} 반환.
+    """마스터 파일을 파싱하여 {'wms', 'coupang', 'wms_skipped', 'coupang_skipped'} 반환.
 
     양쪽 시트가 있으면 둘 다, 한쪽만 있으면 해당 것만 반환.
+    *_skipped: PK(WMS바코드 또는 쿠팡옵션ID) 가 비어있어 적용 못 한 행들 (사용자 통지용).
     """
     wb = openpyxl.load_workbook(BytesIO(file_bytes), data_only=True)
-    result: dict[str, list[dict]] = {"wms": [], "coupang": []}
+    result: dict[str, list[dict]] = {
+        "wms": [], "coupang": [],
+        "wms_skipped": [], "coupang_skipped": [],
+    }
 
     for sname in wb.sheetnames:
         ws = wb[sname]
@@ -167,7 +192,7 @@ def parse_master_file(file_bytes: bytes, filename: str) -> dict[str, list[dict]]
 
         # 1) 시트 이름으로 우선 판별 (가장 신뢰도 높음)
         if "WMS" in sname_upper and "쿠팡" not in sname:
-            result["wms"] = parse_wms_sheet(ws)
+            result["wms"], result["wms_skipped"] = parse_wms_sheet(ws)
             continue
         if "쿠팡" in sname:
             result["coupang"] = parse_coupang_sheet(ws)
@@ -178,7 +203,7 @@ def parse_master_file(file_bytes: bytes, filename: str) -> dict[str, list[dict]]
         first_text = " ".join(first_row_vals)
 
         if first_text.startswith("WMS") or ("WMS바코드" == first_row_vals[0].strip()):
-            result["wms"] = parse_wms_sheet(ws)
+            result["wms"], result["wms_skipped"] = parse_wms_sheet(ws)
         elif "등록상품" in first_text or "옵션 ID" in first_text or "옵션ID" in first_text:
             result["coupang"] = parse_coupang_sheet(ws)
 

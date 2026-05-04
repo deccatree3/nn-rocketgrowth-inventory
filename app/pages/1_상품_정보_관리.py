@@ -167,7 +167,21 @@ with st.expander("📤 파일 업로드로 일괄 관리 (추가/수정/교체)"
             parsed = parse_master_file(master_file.getvalue(), master_file.name)
             wms_count = len(parsed["wms"])
             cp_count = len(parsed["coupang"])
+            wms_skipped = parsed.get("wms_skipped", [])
             st.success(f"파싱 완료: WMS {wms_count}건 · 쿠팡 {cp_count}건")
+
+            if wms_skipped:
+                st.warning(
+                    f"⚠️ WMS상품정보 시트에서 **WMS바코드 가 비어있어 {len(wms_skipped)}건이 스킵**됐습니다. "
+                    "WMS바코드는 PK 라서 비워두면 DB 적용이 불가합니다. "
+                    "번들 행처럼 별도 바코드가 없으면 부모바코드+'_2','_3' 같은 가상값을 채워주세요."
+                )
+                with st.popover(f"스킵된 {len(wms_skipped)}건 보기"):
+                    st.dataframe(
+                        pd.DataFrame(wms_skipped),
+                        use_container_width=True,
+                        hide_index=True,
+                    )
 
             if wms_count > 0:
                 with st.popover(f"WMS {wms_count}건 미리보기"):
